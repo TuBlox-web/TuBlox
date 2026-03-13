@@ -6,45 +6,350 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const path = require('path');
+const fs = require('fs');
+const http = require('http');
+const WebSocket = require('ws');
 
 const app = express();
+const server = http.createServer(app);
 
-app.use(express.json());
+// ═══════════════════════════════════════════════════════════════
+// WEBSOCKET SERVER
+// ═══════════════════════════════════════════════════════════════
+
+const wss = new WebSocket.Server({ server });
+
+// Структура серверов игр
+// gameServers = { gameId: { host: ws, players: Map<odilId, {ws, data}>, hostOdilId, createdAt } }
+const gameServers = new Map();
+
+// Все подключённые клиенты
+const connectedClients = new Map(); // odilId -> {ws, gameId, username}
+
+// Типы пакетов (синхронизировано с C++ Protocol.h)
+const PacketType = {
+    // Подключение
+    CONNECT_REQUEST: 1,
+    CONNECT_RESPONSE: 2,
+    DISCONNECT: 3,
+    PING: 4,
+    PONG: 5,
+
+    // Игроки
+    PLAYER_JOIN: 10,
+    PLAYER_LEAVE: 11,
+    PLAYER_STATE: 12,
+    PLAYER_INPUT: 13,
+    PLAYER_LIST: 14,
+
+    // Мир
+    WORLD_STATE: 20,
+    OBJECT_SPAWN: 21,
+    OBJECT_DESTROY: 22,
+    OBJECT_UPDATE: 23,
+
+    // Чат
+    CHAT_MESSAGE: 30,
+
+    // Хост/сервер
+    HOST_ASSIGN: 50,
+    BUILD_DATA: 51,
+    SERVER_INFO: 52
+};
+
+function broadcastToGame(gameId, data, excludeOdilId = null) {
+    const game = gameServers.get(gameId);
+    if (!game) return;
+
+    const message = typeof data === 'string' ? data : JSON.stringify(data);
+    
+    game.players.forEach((player, odilId) => {
+        if (odilId !== excludeOdilId && player.ws.readyState === WebSocket.OPEN) {
+            player.ws.send(message);
+        }
+    });
+}
+
+function sendToClient(ws, data) {
+    if (ws.readyState === WebSocket.OPEN) {
+        ws.send(typeof data === 'string' ? data : JSON.stringify(data));
+    }
+}
+
+function getOrCreateGameServer(gameId) {
+    if (!gameServers.has(gameId)) {
+        gameServers.set(gameId, {
+            hostOdilId: null,
+            players: new Map(),
+            createdAt: Date.now(),
+            buildData: null
+        });
+    }
+    return gameServers.get(gameId);
+}
+
+wss.on('connection', (ws, req) => {
+    let clientOdilId = null;
+    let clientGameId = null;
+    let clientUsername = null;
+
+    console.log('[WS] New connection');
+
+    ws.on('message', async (message) => {
+        try {
+            const data = JSON.parse(message);
+            
+            switch (data.type) {
+                case PacketType.CONNECT_REQUEST: {
+                    clientOdilId = data.odilId;
+                    clientGameId = data.gameId || 'tublox-world';
+                    clientUsername = data.username || `Player${clientOdilId}`;
+
+                    console.log(`[WS] Connect: ${clientUsername} (#${clientOdilId}) -> ${clientGameId}`);
+
+                    const game = getOrCreateGameServer(clientGameId);
+                    
+                    // Определяем, является ли этот игрок хостом
+                    let isHost = false;
+                    if (game.hostOdilId === null || game.players.size === 0) {
+                        game.hostOdilId = clientOdilId;
+                        isHost = true;
+                        console.log(`[WS] ${clientUsername} is now HOST of ${clientGameId}`);
+                        
+                        // Загружаем buildData для хоста
+                        const gameDoc = await Game.findOne({ id: clientGameId });
+                        if (gameDoc && gameDoc.buildData) {
+                            game.buildData = gameDoc.buildData;
+                        }
+                    }
+
+                    // Добавляем игрока
+                    game.players.set(clientOdilId, {
+                        ws,
+                        username: clientUsername,
+                        position: { x: 0, y: 5, z: 0 },
+                        rotation: { x: 0, y: 0, z: 0 },
+                        velocity: { x: 0, y: 0, z: 0 },
+                        animationId: 0,
+                        isGrounded: false,
+                        isJumping: false,
+                        isSprinting: false,
+                        isInWater: false,
+                        lastUpdate: Date.now()
+                    });
+
+                    connectedClients.set(clientOdilId, { ws, gameId: clientGameId, username: clientUsername });
+
+                    // Обновляем количество игроков в БД
+                    await Game.findOneAndUpdate(
+                        { id: clientGameId },
+                        { activePlayers: game.players.size }
+                    );
+
+                    // Отправляем ответ подключения
+                    sendToClient(ws, {
+                        type: PacketType.CONNECT_RESPONSE,
+                        success: true,
+                        odilId: clientOdilId,
+                        isHost: isHost,
+                        spawnX: 0,
+                        spawnY: 5,
+                        spawnZ: 0,
+                        message: 'Connected!'
+                    });
+
+                    // Если хост - отправляем buildData
+                    if (isHost && game.buildData) {
+                        sendToClient(ws, {
+                            type: PacketType.BUILD_DATA,
+                            buildData: game.buildData
+                        });
+                    }
+
+                    // Отправляем список существующих игроков новичку
+                    game.players.forEach((player, odilId) => {
+                        if (odilId !== clientOdilId) {
+                            sendToClient(ws, {
+                                type: PacketType.PLAYER_JOIN,
+                                odilId: odilId,
+                                username: player.username,
+                                posX: player.position.x,
+                                posY: player.position.y,
+                                posZ: player.position.z
+                            });
+                        }
+                    });
+
+                    // Уведомляем всех о новом игроке
+                    broadcastToGame(clientGameId, {
+                        type: PacketType.PLAYER_JOIN,
+                        odilId: clientOdilId,
+                        username: clientUsername,
+                        posX: 0,
+                        posY: 5,
+                        posZ: 0
+                    }, clientOdilId);
+
+                    console.log(`[WS] ${clientGameId} now has ${game.players.size} players`);
+                    break;
+                }
+
+                case PacketType.PLAYER_STATE: {
+                    if (!clientGameId || !clientOdilId) break;
+
+                    const game = gameServers.get(clientGameId);
+                    if (!game) break;
+
+                    const player = game.players.get(clientOdilId);
+                    if (player) {
+                        player.position = { x: data.posX, y: data.posY, z: data.posZ };
+                        player.rotation = { x: data.rotX, y: data.rotY, z: data.rotZ };
+                        player.velocity = { x: data.velX, y: data.velY, z: data.velZ };
+                        player.animationId = data.animationId || 0;
+                        player.isGrounded = data.isGrounded || false;
+                        player.isJumping = data.isJumping || false;
+                        player.isSprinting = data.isSprinting || false;
+                        player.isInWater = data.isInWater || false;
+                        player.lastUpdate = Date.now();
+                    }
+
+                    // Рассылаем состояние другим игрокам
+                    broadcastToGame(clientGameId, {
+                        type: PacketType.PLAYER_STATE,
+                        odilId: clientOdilId,
+                        posX: data.posX,
+                        posY: data.posY,
+                        posZ: data.posZ,
+                        rotX: data.rotX,
+                        rotY: data.rotY,
+                        rotZ: data.rotZ,
+                        velX: data.velX,
+                        velY: data.velY,
+                        velZ: data.velZ,
+                        animationId: data.animationId || 0,
+                        isGrounded: data.isGrounded || false,
+                        isJumping: data.isJumping || false,
+                        isSprinting: data.isSprinting || false,
+                        isInWater: data.isInWater || false
+                    }, clientOdilId);
+                    break;
+                }
+
+                case PacketType.CHAT_MESSAGE: {
+                    if (!clientGameId) break;
+
+                    broadcastToGame(clientGameId, {
+                        type: PacketType.CHAT_MESSAGE,
+                        odilId: clientOdilId,
+                        username: clientUsername,
+                        message: data.message
+                    });
+                    
+                    console.log(`[Chat] ${clientUsername}: ${data.message}`);
+                    break;
+                }
+
+                case PacketType.PING: {
+                    sendToClient(ws, {
+                        type: PacketType.PONG,
+                        clientTime: data.clientTime,
+                        serverTime: Date.now()
+                    });
+                    break;
+                }
+
+                case PacketType.DISCONNECT: {
+                    // Обработка будет в ws.on('close')
+                    break;
+                }
+            }
+        } catch (err) {
+            console.error('[WS] Message error:', err);
+        }
+    });
+
+    ws.on('close', async () => {
+        console.log(`[WS] Disconnected: ${clientUsername} (#${clientOdilId})`);
+
+        if (clientGameId && clientOdilId) {
+            const game = gameServers.get(clientGameId);
+            
+            if (game) {
+                game.players.delete(clientOdilId);
+                
+                // Уведомляем других
+                broadcastToGame(clientGameId, {
+                    type: PacketType.PLAYER_LEAVE,
+                    odilId: clientOdilId
+                });
+
+                // Если ушёл хост - назначаем нового
+                if (game.hostOdilId === clientOdilId) {
+                    if (game.players.size > 0) {
+                        const newHostId = game.players.keys().next().value;
+                        game.hostOdilId = newHostId;
+                        
+                        const newHost = game.players.get(newHostId);
+                        if (newHost) {
+                            sendToClient(newHost.ws, {
+                                type: PacketType.HOST_ASSIGN,
+                                isHost: true
+                            });
+                            console.log(`[WS] New host for ${clientGameId}: ${newHost.username}`);
+                        }
+                    } else {
+                        // Сервер пуст - удаляем
+                        gameServers.delete(clientGameId);
+                        console.log(`[WS] Game server ${clientGameId} closed (empty)`);
+                    }
+                }
+
+                // Обновляем количество игроков
+                await Game.findOneAndUpdate(
+                    { id: clientGameId },
+                    { activePlayers: game ? game.players.size : 0 }
+                );
+            }
+        }
+
+        connectedClients.delete(clientOdilId);
+    });
+
+    ws.on('error', (err) => {
+        console.error('[WS] Error:', err);
+    });
+});
+
+// Периодическая проверка таймаутов
+setInterval(() => {
+    const now = Date.now();
+    
+    gameServers.forEach((game, gameId) => {
+        game.players.forEach((player, odilId) => {
+            // Таймаут 30 секунд
+            if (now - player.lastUpdate > 30000) {
+                console.log(`[WS] Timeout: ${player.username} in ${gameId}`);
+                if (player.ws.readyState === WebSocket.OPEN) {
+                    player.ws.close();
+                }
+            }
+        });
+    });
+}, 10000);
+
+// ═══════════════════════════════════════════════════════════════
+// EXPRESS MIDDLEWARE
+// ═══════════════════════════════════════════════════════════════
+
+app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 app.use(express.static('public'));
 
-// MongoDB
-mongoose.connect(process.env.MONGODB_URI)
-    .then(async () => {
-        console.log('MongoDB connected');
-        try {
-            await mongoose.connection.collection('users').dropIndex('email_1');
-        } catch (e) {}
-        
-        // Создаём тестовую игру если нет игр
-        const gameCount = await Game.countDocuments();
-        if (gameCount === 0) {
-            await Game.create({
-                id: 'tublox-world',
-                title: 'TuBlox World',
-                description: 'The official TuBlox experience! Explore, build, and play with friends in an open world adventure.',
-                creator: 'TuBlox',
-                creatorId: 1,
-                thumbnail: '/img/games/tublox-world.png',
-                featured: true,
-                visits: 0,
-                likes: 95,
-                maxPlayers: 50,
-                serverHost: '127.0.0.1',
-                serverPort: 7777
-            });
-            console.log('Default game created');
-        }
-    })
-    .catch(err => console.error('MongoDB error:', err));
+// ═══════════════════════════════════════════════════════════════
+// MONGOOSE SCHEMAS
+// ═══════════════════════════════════════════════════════════════
 
-// Counter for auto-increment ID
 const counterSchema = new mongoose.Schema({
     _id: String,
     seq: { type: Number, default: 0 }
@@ -60,7 +365,6 @@ async function getNextUserId() {
     return counter.seq;
 }
 
-// User Schema
 const userSchema = new mongoose.Schema({
     odilId: { type: Number, unique: true },
     username: { 
@@ -84,7 +388,6 @@ const userSchema = new mongoose.Schema({
 
 const User = mongoose.model('User', userSchema);
 
-// Game Schema
 const gameSchema = new mongoose.Schema({
     id: { type: String, unique: true, required: true },
     title: { type: String, required: true },
@@ -94,31 +397,122 @@ const gameSchema = new mongoose.Schema({
     thumbnail: { type: String, default: '' },
     featured: { type: Boolean, default: false },
     visits: { type: Number, default: 0 },
-    likes: { type: Number, default: 0 },
     activePlayers: { type: Number, default: 0 },
     maxPlayers: { type: Number, default: 50 },
-    serverHost: { type: String, default: '127.0.0.1' },
-    serverPort: { type: Number, default: 7777 },
+    buildData: { type: mongoose.Schema.Types.Mixed, default: null },
     createdAt: { type: Date, default: Date.now },
     updatedAt: { type: Date, default: Date.now }
 });
 
 const Game = mongoose.model('Game', gameSchema);
 
-// Launch Token Schema (для безопасного запуска игры)
 const launchTokenSchema = new mongoose.Schema({
     token: { type: String, unique: true },
     odilId: { type: Number, required: true },
     username: { type: String, required: true },
     gameId: { type: String, required: true },
-    serverHost: { type: String },
-    serverPort: { type: Number },
-    createdAt: { type: Date, default: Date.now, expires: 300 } // 5 минут
+    createdAt: { type: Date, default: Date.now, expires: 300 }
 });
 
 const LaunchToken = mongoose.model('LaunchToken', launchTokenSchema);
 
-// Auth Middleware
+// ═══════════════════════════════════════════════════════════════
+// DEFAULT WORLD DATA
+// ═══════════════════════════════════════════════════════════════
+
+const defaultWorldBuildData = {
+    objects: [
+        {
+            type: 'grass_cube',
+            position: { x: 0, y: -1, z: 0 },
+            scale: { x: 120, y: 2, z: 120 },
+            isStatic: true
+        },
+        {
+            type: 'spawn',
+            position: { x: 0, y: 2, z: 0 }
+        },
+        {
+            type: 'cube',
+            position: { x: 0, y: 0, z: 0 },
+            scale: { x: 10, y: 0.3, z: 10 },
+            color: { r: 0.85, g: 0.85, b: 0.85 },
+            isStatic: true
+        },
+        {
+            type: 'cube',
+            position: { x: 5, y: 1, z: 0 },
+            scale: { x: 3, y: 2, z: 3 },
+            color: { r: 0.3, g: 0.7, b: 0.3 },
+            isStatic: true
+        },
+        {
+            type: 'cube',
+            position: { x: -5, y: 1.5, z: 5 },
+            scale: { x: 4, y: 3, z: 4 },
+            color: { r: 0.7, g: 0.3, b: 0.3 },
+            isStatic: true
+        },
+        {
+            type: 'cube',
+            position: { x: 10, y: 0.2, z: 0 },
+            scale: { x: 3, y: 0.3, z: 3 },
+            color: { r: 1.0, g: 0.3, b: 0.5 },
+            isStatic: true,
+            bounciness: 2.0
+        },
+        {
+            type: 'cube',
+            position: { x: 10, y: 0.2, z: 5 },
+            scale: { x: 3, y: 0.3, z: 3 },
+            color: { r: 0.3, g: 1.0, b: 0.5 },
+            isStatic: true,
+            bounciness: 3.0
+        }
+    ],
+    settings: {
+        gravity: -9.81,
+        skyColor: { r: 0.45, g: 0.65, b: 0.95 },
+        fogEnabled: false,
+        spawnPoint: { x: 0, y: 2, z: 0 }
+    },
+    version: 1
+};
+
+// ═══════════════════════════════════════════════════════════════
+// MONGODB CONNECTION
+// ═══════════════════════════════════════════════════════════════
+
+mongoose.connect(process.env.MONGODB_URI)
+    .then(async () => {
+        console.log('MongoDB connected');
+        try {
+            await mongoose.connection.collection('users').dropIndex('email_1');
+        } catch (e) {}
+        
+        const gameCount = await Game.countDocuments();
+        if (gameCount === 0) {
+            await Game.create({
+                id: 'tublox-world',
+                title: 'TuBlox World',
+                description: 'Welcome to TuBlox World! Explore, play and have fun with friends!',
+                creator: 'TuBlox',
+                creatorId: 1,
+                thumbnail: '/img/games/tublox-world.png',
+                featured: true,
+                visits: 0,
+                maxPlayers: 50,
+                buildData: defaultWorldBuildData
+            });
+            console.log('Default game created');
+        }
+    })
+    .catch(err => console.error('MongoDB error:', err));
+
+// ═══════════════════════════════════════════════════════════════
+// AUTH MIDDLEWARE
+// ═══════════════════════════════════════════════════════════════
+
 const auth = async (req, res, next) => {
     try {
         const token = req.cookies.token;
@@ -207,10 +601,6 @@ app.get('/users', (req, res) => {
 
 app.get('/user/:id', (req, res) => {
     res.sendFile(path.join(__dirname, 'pages', 'profile.html'));
-});
-
-app.get('/countdown', (req, res) => {
-    res.sendFile(path.join(__dirname, 'pages', 'countdown.html'));
 });
 
 // ═══════════════════════════════════════════════════════════════
@@ -362,7 +752,6 @@ app.post('/api/logout', (req, res) => {
 // API - GAMES
 // ═══════════════════════════════════════════════════════════════
 
-// Получить список игр
 app.get('/api/games', async (req, res) => {
     try {
         const { featured, limit } = req.query;
@@ -373,6 +762,7 @@ app.get('/api/games', async (req, res) => {
         }
         
         const games = await Game.find(query)
+            .select('-buildData')
             .sort({ featured: -1, visits: -1 })
             .limit(parseInt(limit) || 50);
         
@@ -382,10 +772,9 @@ app.get('/api/games', async (req, res) => {
     }
 });
 
-// Получить игру по ID
 app.get('/api/game/:id', async (req, res) => {
     try {
-        const game = await Game.findOne({ id: req.params.id });
+        const game = await Game.findOne({ id: req.params.id }).select('-buildData');
         
         if (!game) {
             return res.status(404).json({ success: false, message: 'Game not found' });
@@ -397,7 +786,47 @@ app.get('/api/game/:id', async (req, res) => {
     }
 });
 
-// Запуск игры - создаёт токен для клиента
+// ═══════════════════════════════════════════════════════════════
+// API - GAME SERVERS (Live)
+// ═══════════════════════════════════════════════════════════════
+
+app.get('/api/game/:id/servers', async (req, res) => {
+    try {
+        const gameId = req.params.id;
+        const game = gameServers.get(gameId);
+        
+        if (!game || game.players.size === 0) {
+            return res.json({ 
+                success: true, 
+                servers: [],
+                message: 'No active servers'
+            });
+        }
+
+        // Для простоты — один "сервер" на игру
+        const hostPlayer = game.players.get(game.hostOdilId);
+        
+        res.json({
+            success: true,
+            servers: [{
+                id: gameId,
+                name: `${hostPlayer?.username || 'Unknown'}'s Server`,
+                players: game.players.size,
+                maxPlayers: 50,
+                hostOdilId: game.hostOdilId,
+                hostUsername: hostPlayer?.username || 'Unknown',
+                ping: 0 // Можно добавить реальный пинг
+            }]
+        });
+    } catch (err) {
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+});
+
+// ═══════════════════════════════════════════════════════════════
+// API - GAME LAUNCH
+// ═══════════════════════════════════════════════════════════════
+
 app.post('/api/game/launch', authAPI, async (req, res) => {
     try {
         const { gameId } = req.body;
@@ -407,27 +836,27 @@ app.post('/api/game/launch', authAPI, async (req, res) => {
             return res.status(404).json({ success: false, message: 'Game not found' });
         }
         
-        // Увеличиваем счётчик посещений
         game.visits += 1;
         await game.save();
         
-        // Создаём уникальный токен для запуска
-        const token = crypto.randomBytes(32).toString('hex');
+        const launchToken = crypto.randomBytes(32).toString('hex');
         
         await LaunchToken.create({
-            token,
+            token: launchToken,
             odilId: req.user.odilId,
             username: req.user.username,
-            gameId: game.id,
-            serverHost: game.serverHost,
-            serverPort: game.serverPort
+            gameId: game.id
         });
         
+        console.log(`[Launch] ${req.user.username} launching ${gameId}`);
+        
+        // Возвращаем WebSocket endpoint
         res.json({ 
             success: true, 
-            token,
-            serverHost: game.serverHost,
-            serverPort: game.serverPort
+            token: launchToken,
+            wsHost: process.env.WS_HOST || 'localhost',
+            wsPort: parseInt(process.env.PORT) || 3000,
+            gameId: game.id
         });
     } catch (err) {
         console.error(err);
@@ -435,7 +864,6 @@ app.post('/api/game/launch', authAPI, async (req, res) => {
     }
 });
 
-// Валидация токена (вызывается клиентом при запуске)
 app.get('/api/game/validate/:token', async (req, res) => {
     try {
         const launchData = await LaunchToken.findOne({ token: req.params.token });
@@ -444,142 +872,52 @@ app.get('/api/game/validate/:token', async (req, res) => {
             return res.status(404).json({ success: false, message: 'Invalid or expired token' });
         }
         
-        // Удаляем токен после использования
+        const game = await Game.findOne({ id: launchData.gameId });
+        
         await LaunchToken.deleteOne({ token: req.params.token });
         
-        res.json({
+        const response = {
             success: true,
             odilId: launchData.odilId,
             username: launchData.username,
             gameId: launchData.gameId,
-            serverHost: launchData.serverHost,
-            serverPort: launchData.serverPort
-        });
-    } catch (err) {
-        res.status(500).json({ success: false, message: 'Server error' });
-    }
-});
-
-// Лайк игры
-app.post('/api/game/:id/like', authAPI, async (req, res) => {
-    try {
-        const game = await Game.findOne({ id: req.params.id });
-        if (!game) {
-            return res.status(404).json({ success: false, message: 'Game not found' });
+            wsHost: process.env.WS_HOST || 'localhost',
+            wsPort: parseInt(process.env.PORT) || 3000
+        };
+        
+        if (game && game.buildData) {
+            response.buildData = game.buildData;
+        } else {
+            response.buildData = defaultWorldBuildData;
         }
         
-        // TODO: проверить что пользователь ещё не лайкал
-        game.likes = Math.min(100, game.likes + 1);
-        await game.save();
-        
-        res.json({ success: true, likes: game.likes });
+        res.json(response);
     } catch (err) {
+        console.error('[Validate] Error:', err);
         res.status(500).json({ success: false, message: 'Server error' });
     }
 });
 
 // ═══════════════════════════════════════════════════════════════
-// API - GAME DATA
+// DOWNLOADS
 // ═══════════════════════════════════════════════════════════════
 
-app.post('/api/gamedata', authAPI, async (req, res) => {
-    try {
-        const { level, coins, playTime } = req.body;
-        const update = {};
-        
-        if (typeof level === 'number') update['gameData.level'] = level;
-        if (typeof coins === 'number') update['gameData.coins'] = coins;
-        if (typeof playTime === 'number') update['gameData.playTime'] = playTime;
-        
-        await User.findByIdAndUpdate(req.user._id, update);
-        res.json({ success: true });
-    } catch (err) {
-        res.status(500).json({ success: false, message: 'Save error' });
-    }
-});
-
-// ═══════════════════════════════════════════════════════════════
-// API - GAME SERVERS
-// ═══════════════════════════════════════════════════════════════
-
-const gameServers = new Map();
-
-app.post('/api/servers/register', (req, res) => {
-    const { name, port, maxPlayers, gameId } = req.body;
-    const host = '127.0.0.1';
-    const serverId = `${host}:${port || 7777}`;
+app.get('/download/TuBloxSetup.exe', (req, res) => {
+    const filePath = path.join(__dirname, 'public', 'download', 'TuBloxSetup.exe');
     
-    gameServers.set(serverId, {
-        id: serverId,
-        name: name || 'Game Server',
-        host: host,
-        port: port || 7777,
-        maxPlayers: maxPlayers || 64,
-        players: 0,
-        gameId: gameId || 'tublox-world',
-        lastSeen: Date.now()
-    });
-    
-    console.log(`[Servers] Registered: ${serverId}`);
-    res.json({ success: true, serverId });
-});
-
-app.post('/api/servers/heartbeat', async (req, res) => {
-    const { serverId, players } = req.body;
-    
-    if (gameServers.has(serverId)) {
-        const server = gameServers.get(serverId);
-        server.players = players || 0;
-        server.lastSeen = Date.now();
-        
-        // Обновляем activePlayers в игре
-        if (server.gameId) {
-            await Game.findOneAndUpdate(
-                { id: server.gameId },
-                { activePlayers: players || 0 }
-            );
-        }
-        
-        res.json({ success: true });
-    } else {
-        gameServers.set(serverId, {
-            id: serverId,
-            name: 'Game Server',
-            host: serverId.split(':')[0],
-            port: parseInt(serverId.split(':')[1]) || 7777,
-            maxPlayers: 64,
-            players: players || 0,
-            lastSeen: Date.now()
-        });
-        res.json({ success: true, registered: true });
-    }
-});
-
-app.get('/download/TuClient.zip', (req, res) => {
-    const filePath = path.join(__dirname, 'public', 'download', 'TuClient.zip');
-    
-    if (!require('fs').existsSync(filePath)) {
+    if (!fs.existsSync(filePath)) {
         return res.status(404).send('File not found');
     }
     
-    res.download(filePath, 'TuClient.zip');
+    res.download(filePath, 'TuBloxSetup.exe');
 });
 
-app.get('/api/servers', (req, res) => {
-    const now = Date.now();
-    const servers = [];
-    
-    for (const [id, server] of gameServers) {
-        if (now - server.lastSeen > 15000) {
-            gameServers.delete(id);
-            console.log(`[Servers] Removed offline: ${id}`);
-        } else {
-            servers.push(server);
-        }
-    }
-    
-    res.json({ success: true, servers });
-});
+// ═══════════════════════════════════════════════════════════════
+// START SERVER
+// ═══════════════════════════════════════════════════════════════
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`http://localhost:${PORT}`));
+server.listen(PORT, () => {
+    console.log(`Server running on http://localhost:${PORT}`);
+    console.log(`WebSocket running on ws://localhost:${PORT}`);
+});

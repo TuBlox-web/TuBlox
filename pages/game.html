@@ -5,6 +5,323 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>TuBlox — Game</title>
     <link rel="stylesheet" href="/css/style.css">
+    <style>
+        /* ============================== */
+        /* Launch Modal States            */
+        /* ============================== */
+        .launch-state {
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .launch-state.active {
+            display: flex;
+        }
+
+        .launch-state p {
+            color: var(--gray);
+            font-size: 14px;
+            margin: 0;
+            line-height: 1.6;
+        }
+
+        .launch-state h4 {
+            margin: 0;
+            font-family: 'Sora', sans-serif;
+            font-size: 18px;
+            font-weight: 600;
+        }
+
+        /* Connecting */
+        .launch-connecting .spinner {
+            width: 48px;
+            height: 48px;
+        }
+
+        /* Success */
+        .launch-success .success-icon {
+            width: 56px;
+            height: 56px;
+            border-radius: 50%;
+            background: rgba(34, 197, 94, 0.12);
+            border: 1px solid rgba(34, 197, 94, 0.2);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .launch-success .success-icon svg {
+            width: 26px;
+            height: 26px;
+            color: var(--green);
+        }
+
+        /* Not Found / Download */
+        .launch-notfound .notfound-icon {
+            width: 64px;
+            height: 64px;
+            border-radius: 16px;
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .launch-notfound .notfound-icon svg {
+            width: 28px;
+            height: 28px;
+            color: var(--gray);
+        }
+
+        .launch-notfound .btn-primary {
+            width: 100%;
+            padding: 14px;
+            font-size: 15px;
+            border-radius: 12px;
+            margin-top: 4px;
+        }
+
+        .launch-notfound .btn-primary svg {
+            width: 18px;
+            height: 18px;
+        }
+
+        .install-steps {
+            width: 100%;
+            text-align: left;
+            margin-top: 20px;
+            padding-top: 20px;
+            border-top: 1px solid var(--border);
+        }
+
+        .install-steps h5 {
+            font-family: 'General Sans', sans-serif;
+            font-size: 11px;
+            font-weight: 600;
+            color: var(--gray-dark);
+            margin: 0 0 14px 0;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .install-step {
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            padding: 6px 0;
+        }
+
+        .install-step-num {
+            width: 22px;
+            height: 22px;
+            border-radius: 50%;
+            background: var(--white);
+            color: var(--bg);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 11px;
+            font-weight: 700;
+            flex-shrink: 0;
+            margin-top: 1px;
+        }
+
+        .install-step-text {
+            font-size: 13px;
+            color: var(--gray);
+            line-height: 1.5;
+        }
+
+        .install-step-text strong {
+            color: var(--white);
+        }
+
+        /* Error */
+        .launch-error .error-icon {
+            width: 56px;
+            height: 56px;
+            border-radius: 50%;
+            background: rgba(255, 51, 51, 0.1);
+            border: 1px solid rgba(255, 51, 51, 0.2);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .launch-error .error-icon svg {
+            width: 24px;
+            height: 24px;
+            color: #ff3333;
+        }
+
+        .launch-error .btn {
+            margin-top: 4px;
+        }
+
+        /* ============================== */
+        /* Servers Modal                  */
+        /* ============================== */
+        .servers-modal .modal-content {
+            max-width: 500px;
+        }
+
+        .servers-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        .server-item {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            padding: 16px;
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .server-item:hover {
+            border-color: var(--border-light);
+            transform: translateY(-2px);
+        }
+
+        .server-icon {
+            width: 48px;
+            height: 48px;
+            background: rgba(34, 197, 94, 0.1);
+            border: 1px solid rgba(34, 197, 94, 0.2);
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .server-icon svg {
+            width: 24px;
+            height: 24px;
+            color: var(--green);
+        }
+
+        .server-info {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .server-name {
+            font-weight: 600;
+            font-size: 15px;
+            margin-bottom: 4px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .server-meta {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-size: 13px;
+            color: var(--gray);
+        }
+
+        .server-players {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .server-players .dot {
+            width: 6px;
+            height: 6px;
+            background: var(--green);
+            border-radius: 50%;
+        }
+
+        .server-ping {
+            color: var(--gray-dark);
+        }
+
+        .server-join-btn {
+            padding: 10px 20px;
+            font-size: 13px;
+            border-radius: 8px;
+        }
+
+        .servers-empty {
+            text-align: center;
+            padding: 48px 24px;
+        }
+
+        .servers-empty-icon {
+            width: 64px;
+            height: 64px;
+            margin: 0 auto 16px;
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .servers-empty-icon svg {
+            width: 28px;
+            height: 28px;
+            color: var(--gray-dark);
+        }
+
+        .servers-empty h4 {
+            font-size: 16px;
+            margin-bottom: 8px;
+        }
+
+        .servers-empty p {
+            color: var(--gray);
+            font-size: 14px;
+            margin-bottom: 20px;
+        }
+
+        .servers-loading {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 16px;
+            padding: 48px;
+        }
+
+        .servers-refresh {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+            padding-bottom: 16px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .servers-count {
+            font-size: 13px;
+            color: var(--gray);
+        }
+
+        .btn-refresh {
+            padding: 8px 14px;
+            font-size: 12px;
+            gap: 6px;
+        }
+
+        .btn-refresh svg {
+            width: 14px;
+            height: 14px;
+        }
+    </style>
 </head>
 <body>
     <nav class="navbar">
@@ -30,30 +347,101 @@
         </div>
     </div>
 
-    <!-- Play Modal -->
+    <!-- Launch Modal -->
     <div class="modal" id="play-modal">
         <div class="modal-backdrop"></div>
         <div class="modal-content">
             <div class="modal-header">
-                <h3>Launching Game</h3>
+                <h3 id="modal-title">Launching Game</h3>
                 <button class="modal-close" onclick="closePlayModal()">&times;</button>
             </div>
             <div class="modal-body">
-                <div class="launch-status" id="launch-status">
+
+                <!-- State: Connecting -->
+                <div class="launch-state launch-connecting active" id="state-connecting">
                     <div class="spinner"></div>
-                    <p>Starting TuBlox Client...</p>
+                    <h4>Launching TuBlox...</h4>
+                    <p>Opening the game client</p>
                 </div>
-                <div class="launch-download" id="launch-download" style="display:none;">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="download-icon">
-                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-                        <polyline points="7 10 12 15 17 10"/>
-                        <line x1="12" y1="15" x2="12" y2="3"/>
-                    </svg>
+
+                <!-- State: Success -->
+                <div class="launch-state launch-success" id="state-success">
+                    <div class="success-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                            <polyline points="20 6 9 17 4 12"/>
+                        </svg>
+                    </div>
+                    <h4>Game Launched!</h4>
+                    <p>TuBlox Client is starting up.<br>You can close this window.</p>
+                </div>
+
+                <!-- State: Client Not Found -->
+                <div class="launch-state launch-notfound" id="state-notfound">
+                    <div class="notfound-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                            <polyline points="7 10 12 15 17 10"/>
+                            <line x1="12" y1="15" x2="12" y2="3"/>
+                        </svg>
+                    </div>
                     <h4>TuBlox Client Required</h4>
-                    <p>Download and install the client to play</p>
+                    <p>Install TuBlox Client to play games</p>
+
                     <a href="/download/TuBloxSetup.exe" class="btn btn-primary">
-                        Download Client
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                            <polyline points="7 10 12 15 17 10"/>
+                            <line x1="12" y1="15" x2="12" y2="3"/>
+                        </svg>
+                        Download TuBlox Client
                     </a>
+
+                    <div class="install-steps">
+                        <h5>How to install</h5>
+                        <div class="install-step">
+                            <div class="install-step-num">1</div>
+                            <div class="install-step-text">Download <strong>TuBloxSetup.exe</strong></div>
+                        </div>
+                        <div class="install-step">
+                            <div class="install-step-num">2</div>
+                            <div class="install-step-text">Run the installer and follow the instructions</div>
+                        </div>
+                        <div class="install-step">
+                            <div class="install-step-num">3</div>
+                            <div class="install-step-text">Come back here and click <strong>Play</strong> again</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- State: Error -->
+                <div class="launch-state launch-error" id="state-error">
+                    <div class="error-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                            <line x1="18" y1="6" x2="6" y2="18"/>
+                            <line x1="6" y1="6" x2="18" y2="18"/>
+                        </svg>
+                    </div>
+                    <h4>Launch Failed</h4>
+                    <p id="error-message">Something went wrong</p>
+                    <button class="btn btn-secondary" onclick="retryLaunch()">Try Again</button>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+    <!-- Servers Modal -->
+    <div class="modal servers-modal" id="servers-modal">
+        <div class="modal-backdrop"></div>
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Active Servers</h3>
+                <button class="modal-close" onclick="closeServersModal()">&times;</button>
+            </div>
+            <div class="modal-body" id="servers-body">
+                <div class="servers-loading">
+                    <div class="spinner"></div>
+                    <p>Loading servers...</p>
                 </div>
             </div>
         </div>

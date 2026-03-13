@@ -7,24 +7,6 @@ console.log('%c⛔ STOP!', 'font-size:24px;font-weight:bold;color:#f00;');
 console.log('%cDo not paste code here.', 'font-size:14px;color:#ff4444;');
 
 // ============================================
-// Countdown Check (client-side)
-// ============================================
-(function() {
-    const LAUNCH = new Date('2026-03-05T15:00:00+03:00').getTime();
-    const now = Date.now();
-    const path = window.location.pathname;
-    
-    // Если дата не наступила и мы НЕ на /, /auth, /countdown — редирект
-    if (now < LAUNCH) {
-        const allowed = ['/', '/auth', '/countdown'];
-        if (!allowed.includes(path)) {
-            window.location.href = '/countdown';
-            return;
-        }
-    }
-})();
-
-// ============================================
 // Toast
 // ============================================
 function toast(msg, type = 'success') {
@@ -48,6 +30,8 @@ function toast(msg, type = 'success') {
 // Current User
 // ============================================
 let currentUser = null;
+let currentLaunchGameId = null;
+let currentGameServers = [];
 
 // ============================================
 // Auth
@@ -82,8 +66,7 @@ async function register(e) {
         const data = await res.json();
         if (data.success) {
             toast(`Account created! ID: #${data.odilId}`);
-            // После регистрации → countdown (не home)
-            setTimeout(() => location.href = '/countdown', 1000);
+            setTimeout(() => location.href = '/home', 1000);
         } else {
             toast(data.message, 'error');
         }
@@ -110,8 +93,7 @@ async function login(e) {
         const data = await res.json();
         if (data.success) {
             toast('Welcome back');
-            // После логина → countdown (не home)
-            setTimeout(() => location.href = '/countdown', 600);
+            setTimeout(() => location.href = '/home', 600);
         } else {
             toast(data.message, 'error');
         }
@@ -200,7 +182,6 @@ function featuredGameHTML(game) {
                 <div class="featured-game-stats">
                     <span><strong>${game.activePlayers || 0}</strong> playing</span>
                     <span><strong>${formatNumber(game.visits || 0)}</strong> visits</span>
-                    <span><strong>${game.likes || 0}%</strong> likes</span>
                 </div>
                 <button class="btn btn-primary" onclick="event.stopPropagation(); playGame('${game.id}')">
                     <svg viewBox="0 0 24 24" fill="currentColor" style="width:18px;height:18px;">
@@ -290,8 +271,8 @@ async function loadGamePage() {
                                     <div class="game-stat-label">Visits</div>
                                 </div>
                                 <div class="game-stat">
-                                    <div class="game-stat-value">${g.likes || 0}%</div>
-                                    <div class="game-stat-label">Likes</div>
+                                    <div class="game-stat-value">${g.maxPlayers || 50}</div>
+                                    <div class="game-stat-label">Max</div>
                                 </div>
                             </div>
                             
@@ -303,8 +284,13 @@ async function loadGamePage() {
                             </button>
                             
                             <div class="game-actions">
-                                <button class="btn btn-secondary" onclick="likeGame('${g.id}')">
-                                    👍 Like
+                                <button class="btn btn-secondary" onclick="openServersModal()">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px;">
+                                        <rect x="2" y="3" width="20" height="14" rx="2"/>
+                                        <line x1="8" y1="21" x2="16" y2="21"/>
+                                        <line x1="12" y1="17" x2="12" y2="21"/>
+                                    </svg>
+                                    Servers
                                 </button>
                                 <button class="btn btn-secondary" onclick="shareGame('${g.id}')">
                                     🔗 Share
@@ -335,9 +321,91 @@ async function loadGamePage() {
 }
 
 // ============================================
-// Play Game
+// Launch System
 // ============================================
+function setLaunchState(state) {
+    document.querySelectorAll('.launch-state').forEach(el => el.classList.remove('active'));
+    
+    const el = document.getElementById(`state-${state}`);
+    if (el) el.classList.add('active');
+    
+    const title = document.getElementById('modal-title');
+    if (title) {
+        const titles = {
+            connecting: 'Launching Game',
+            success: 'Game Started',
+            notfound: 'Install Required',
+            error: 'Launch Failed'
+        };
+        title.textContent = titles[state] || 'Launching Game';
+    }
+}
+
+function openPlayModal() {
+    const modal = document.getElementById('play-modal');
+    if (modal) {
+        modal.classList.add('active');
+        setLaunchState('connecting');
+    }
+}
+
+function closePlayModal() {
+    const modal = document.getElementById('play-modal');
+    if (modal) modal.classList.remove('active');
+    setTimeout(() => setLaunchState('connecting'), 300);
+}
+
+function retryLaunch() {
+    if (currentLaunchGameId) {
+        setLaunchState('connecting');
+        launchGame(currentLaunchGameId);
+    }
+}
+
+function detectClientLaunch(launchUrl) {
+    return new Promise((resolve) => {
+        let detected = false;
+        
+        const onBlur = () => {
+            if (!detected) {
+                detected = true;
+                cleanup();
+                resolve(true);
+            }
+        };
+        
+        const onVisibility = () => {
+            if (document.hidden && !detected) {
+                detected = true;
+                cleanup();
+                resolve(true);
+            }
+        };
+        
+        function cleanup() {
+            window.removeEventListener('blur', onBlur);
+            document.removeEventListener('visibilitychange', onVisibility);
+        }
+        
+        window.addEventListener('blur', onBlur);
+        document.addEventListener('visibilitychange', onVisibility);
+        
+        // Пытаемся открыть протокол
+        window.location.href = launchUrl;
+        
+        // Если за 3.5 секунды ничего — клиент не установлен
+        setTimeout(() => {
+            if (!detected) {
+                cleanup();
+                resolve(false);
+            }
+        }, 3500);
+    });
+}
+
 async function launchGame(gameId) {
+    currentLaunchGameId = gameId;
+    
     try {
         const res = await fetch('/api/game/launch', {
             method: 'POST',
@@ -346,33 +414,52 @@ async function launchGame(gameId) {
         });
         const data = await res.json();
         
-        if (data.success) {
-            const launchData = {
-                username: currentUser.username,
-                odilId: currentUser.odilId,
-                host: data.serverHost || '127.0.0.1',
-                port: data.serverPort || 7777,
-                token: data.token
-            };
-            
-            const jsonStr = JSON.stringify(launchData);
-            const base64 = btoa(unescape(encodeURIComponent(jsonStr)));
-            const launchUrl = 'tublox://play/' + base64;
-            
-            window.location.href = launchUrl;
-            
+        if (!data.success) {
+            setLaunchState('error');
+            const errMsg = document.getElementById('error-message');
+            if (errMsg) errMsg.textContent = data.message || 'Failed to create launch session';
+            return;
+        }
+        
+        // Формируем данные для клиента (WebSocket connection)
+        const launchData = {
+            username: currentUser.username,
+            odilId: currentUser.odilId,
+            host: data.wsHost || window.location.hostname || 'localhost',
+            port: data.wsPort || 3000,
+            gameId: gameId,
+            token: data.token
+        };
+        
+        const jsonStr = JSON.stringify(launchData);
+        const base64 = btoa(unescape(encodeURIComponent(jsonStr)))
+            .replace(/\+/g, '-')
+            .replace(/\//g, '_')
+            .replace(/=/g, '');
+        const launchUrl = 'tublox://play/' + base64;
+        
+        console.log('[Launch] URL:', launchUrl);
+        console.log('[Launch] Data:', launchData);
+        
+        // Пытаемся открыть клиент
+        const clientFound = await detectClientLaunch(launchUrl);
+        
+        if (clientFound) {
+            setLaunchState('success');
             setTimeout(() => {
                 closePlayModal();
-                toast('Game launching...');
-            }, 1500);
+                toast('Game launched! 🎮');
+            }, 3000);
         } else {
-            toast(data.message || 'Failed to launch', 'error');
-            closePlayModal();
+            // Клиент не найден — предлагаем скачать
+            setLaunchState('notfound');
         }
+        
     } catch (e) {
         console.error('Launch error:', e);
-        toast('Connection error', 'error');
-        closePlayModal();
+        setLaunchState('error');
+        const errMsg = document.getElementById('error-message');
+        if (errMsg) errMsg.textContent = 'Connection error. Please try again.';
     }
 }
 
@@ -382,32 +469,149 @@ function playGame(gameId) {
         return;
     }
     
-    const modal = document.getElementById('play-modal');
-    if (modal) {
-        modal.classList.add('active');
-        const status = document.getElementById('launch-status');
-        const download = document.getElementById('launch-download');
-        if (status) status.style.display = 'flex';
-        if (download) download.style.display = 'none';
-    }
-    
+    openPlayModal();
     launchGame(gameId);
-}
-
-function closePlayModal() {
-    const modal = document.getElementById('play-modal');
-    if (modal) modal.classList.remove('active');
-}
-
-async function likeGame(gameId) {
-    const res = await fetch(`/api/game/${gameId}/like`, { method: 'POST' });
-    const data = await res.json();
-    if (data.success) toast('Game liked!');
 }
 
 function shareGame(gameId) {
     navigator.clipboard.writeText(`${location.origin}/game/${gameId}`);
     toast('Link copied!');
+}
+
+// ============================================
+// Servers Modal
+// ============================================
+function openServersModal() {
+    const modal = document.getElementById('servers-modal');
+    if (modal) {
+        modal.classList.add('active');
+        loadGameServers();
+    }
+}
+
+function closeServersModal() {
+    const modal = document.getElementById('servers-modal');
+    if (modal) modal.classList.remove('active');
+}
+
+async function loadGameServers() {
+    const body = document.getElementById('servers-body');
+    if (!body) return;
+
+    const gameId = location.pathname.split('/').pop();
+
+    body.innerHTML = `
+        <div class="servers-loading">
+            <div class="spinner"></div>
+            <p>Loading servers...</p>
+        </div>
+    `;
+
+    try {
+        const res = await fetch(`/api/game/${gameId}/servers`);
+        const data = await res.json();
+
+        if (!data.success) {
+            throw new Error(data.message);
+        }
+
+        currentGameServers = data.servers || [];
+
+        if (currentGameServers.length === 0) {
+            body.innerHTML = `
+                <div class="servers-empty">
+                    <div class="servers-empty-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                            <rect x="2" y="3" width="20" height="14" rx="2"/>
+                            <line x1="8" y1="21" x2="16" y2="21"/>
+                            <line x1="12" y1="17" x2="12" y2="21"/>
+                        </svg>
+                    </div>
+                    <h4>No Active Servers</h4>
+                    <p>Be the first to play! Click Play to start a new server.</p>
+                    <button class="btn btn-primary" onclick="closeServersModal(); playGame('${gameId}')">
+                        <svg viewBox="0 0 24 24" fill="currentColor" style="width:16px;height:16px;">
+                            <polygon points="5 3 19 12 5 21 5 3"/>
+                        </svg>
+                        Start Playing
+                    </button>
+                </div>
+            `;
+            return;
+        }
+
+        let html = `
+            <div class="servers-refresh">
+                <span class="servers-count">${currentGameServers.length} server${currentGameServers.length !== 1 ? 's' : ''} found</span>
+                <button class="btn btn-secondary btn-refresh" onclick="loadGameServers()">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M23 4v6h-6"/>
+                        <path d="M1 20v-6h6"/>
+                        <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10"/>
+                        <path d="M20.49 15a9 9 0 0 1-14.85 3.36L1 14"/>
+                    </svg>
+                    Refresh
+                </button>
+            </div>
+            <div class="servers-list">
+        `;
+
+        for (const server of currentGameServers) {
+            html += `
+                <div class="server-item" onclick="joinServer('${server.id}')">
+                    <div class="server-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                            <rect x="2" y="3" width="20" height="14" rx="2"/>
+                            <line x1="8" y1="21" x2="16" y2="21"/>
+                            <line x1="12" y1="17" x2="12" y2="21"/>
+                        </svg>
+                    </div>
+                    <div class="server-info">
+                        <div class="server-name">${escapeHtml(server.name)}</div>
+                        <div class="server-meta">
+                            <span class="server-players">
+                                <span class="dot"></span>
+                                ${server.players}/${server.maxPlayers} players
+                            </span>
+                            ${server.ping ? `<span class="server-ping">${server.ping}ms</span>` : ''}
+                        </div>
+                    </div>
+                    <button class="btn btn-primary server-join-btn">Join</button>
+                </div>
+            `;
+        }
+
+        html += '</div>';
+        body.innerHTML = html;
+
+    } catch (err) {
+        console.error('Load servers error:', err);
+        body.innerHTML = `
+            <div class="servers-empty">
+                <div class="servers-empty-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                        <circle cx="12" cy="12" r="10"/>
+                        <line x1="12" y1="8" x2="12" y2="12"/>
+                        <line x1="12" y1="16" x2="12.01" y2="16"/>
+                    </svg>
+                </div>
+                <h4>Failed to Load</h4>
+                <p>Could not load server list. Please try again.</p>
+                <button class="btn btn-secondary" onclick="loadGameServers()">Retry</button>
+            </div>
+        `;
+    }
+}
+
+function joinServer(serverId) {
+    closeServersModal();
+    playGame(serverId);
+}
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
 }
 
 // ============================================
@@ -541,6 +745,9 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Modal backdrop close
     document.querySelectorAll('.modal-backdrop').forEach(el => {
-        el.onclick = () => el.closest('.modal').classList.remove('active');
+        el.onclick = () => {
+            const modal = el.closest('.modal');
+            if (modal) modal.classList.remove('active');
+        };
     });
 });

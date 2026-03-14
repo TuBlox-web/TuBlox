@@ -1,4 +1,4 @@
-// server.js - ИСПРАВЛЕННАЯ ВЕРСИЯ
+// server.js - ИСПРАВЛЕННАЯ ВЕРСИЯ С ЧАТОМ
 
 require('dotenv').config();
 const express = require('express');
@@ -77,7 +77,6 @@ const PacketType = {
     SERVER_INFO: 52
 };
 
-// ИСПРАВЛЕНО: Безопасная отправка с проверками
 function sendToClient(ws, data) {
     if (!ws || ws.readyState !== WebSocket.OPEN) {
         return false;
@@ -93,7 +92,6 @@ function sendToClient(ws, data) {
     }
 }
 
-// ИСПРАВЛЕНО: Broadcast с лучшей обработкой ошибок
 function broadcastToGame(gameId, data, excludeOdilId = null) {
     const game = gameServers.get(gameId);
     if (!game) return 0;
@@ -144,13 +142,11 @@ function removePlayerFromGame(gameId, odilId) {
     game.players.delete(odilId);
     connectedClients.delete(odilId);
 
-    // Уведомляем остальных
     broadcastToGame(gameId, {
         type: PacketType.PLAYER_LEAVE,
         odilId: odilId
     });
 
-    // Если ушёл хост - назначаем нового
     if (game.hostOdilId === odilId) {
         if (game.players.size > 0) {
             const newHostId = game.players.keys().next().value;
@@ -183,8 +179,8 @@ wss.on('connection', (ws, req) => {
     let clientGameId = null;
     let clientUsername = null;
     let isConnected = false;
-    let messageQueue = [];  // ДОБАВЛЕНО: очередь сообщений
-    let isProcessing = false;  // ДОБАВЛЕНО: флаг обработки
+    let messageQueue = [];
+    let isProcessing = false;
 
     const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
     console.log(`[WS] New connection from ${clientIp}`);
@@ -192,7 +188,6 @@ wss.on('connection', (ws, req) => {
     ws.isAlive = true;
     ws.on('pong', () => { ws.isAlive = true; });
 
-    // ДОБАВЛЕНО: Обработчик очереди сообщений
     async function processMessageQueue() {
         if (isProcessing || messageQueue.length === 0) return;
         
@@ -206,12 +201,10 @@ wss.on('connection', (ws, req) => {
         isProcessing = false;
     }
 
-    // ИСПРАВЛЕНО: Основной обработчик сообщений
     async function handleMessage(data) {
         try {
             switch (data.type) {
                 case PacketType.CONNECT_REQUEST: {
-                    // Проверяем валидность данных
                     if (!data.odilId || typeof data.odilId !== 'number') {
                         console.error('[WS] Invalid odilId in CONNECT_REQUEST');
                         sendToClient(ws, {
@@ -222,7 +215,6 @@ wss.on('connection', (ws, req) => {
                         return;
                     }
 
-                    // Проверяем, не подключен ли уже этот игрок
                     const existingClient = connectedClients.get(data.odilId);
                     if (existingClient && existingClient.ws !== ws) {
                         console.log(`[WS] Closing old connection for ${data.odilId}`);
@@ -242,7 +234,6 @@ wss.on('connection', (ws, req) => {
 
                     const game = getOrCreateGameServer(clientGameId);
                     
-                    // Определяем хоста
                     let isHost = false;
                     if (game.hostOdilId === null || game.players.size === 0) {
                         game.hostOdilId = clientOdilId;
@@ -259,22 +250,19 @@ wss.on('connection', (ws, req) => {
                         }
                     }
 
-                    // ВАЖНО: Собираем список существующих игроков ДО добавления нового
                     const existingPlayers = [];
                     game.players.forEach((player, odilId) => {
                         if (odilId !== clientOdilId) {
                             existingPlayers.push({
                                 odilId: odilId,
                                 username: player.username,
-                                position: { ...player.position }  // Копируем объект!
+                                position: { ...player.position }
                             });
                         }
                     });
 
-                    // Начальная позиция нового игрока
                     const spawnPosition = { x: 0, y: 5, z: 0 };
 
-                    // Добавляем нового игрока
                     game.players.set(clientOdilId, {
                         ws,
                         username: clientUsername,
@@ -303,7 +291,6 @@ wss.on('connection', (ws, req) => {
                         { activePlayers: game.players.size }
                     ).catch(err => console.error('[DB] Update error:', err));
 
-                    // 1. Отправляем ответ новому игроку
                     sendToClient(ws, {
                         type: PacketType.CONNECT_RESPONSE,
                         success: true,
@@ -315,7 +302,6 @@ wss.on('connection', (ws, req) => {
                         message: 'Connected!'
                     });
 
-                    // 2. Отправляем buildData хосту
                     if (isHost && game.buildData) {
                         sendToClient(ws, {
                             type: PacketType.BUILD_DATA,
@@ -323,13 +309,11 @@ wss.on('connection', (ws, req) => {
                         });
                     }
 
-                    // 3. ИСПРАВЛЕНО: Отправляем список существующих игроков новичку с задержкой
-                    // Это даёт время клиенту обработать CONNECT_RESPONSE
                     setTimeout(() => {
                         if (ws.readyState !== WebSocket.OPEN) return;
                         
                         for (const player of existingPlayers) {
-                            console.log(`[WS] Sending existing player ${player.username} (#${player.odilId}) to ${clientUsername}`);
+                            console.log(`[WS] Sending existing player ${player.username} to ${clientUsername}`);
                             
                             sendToClient(ws, {
                                 type: PacketType.PLAYER_JOIN,
@@ -341,7 +325,6 @@ wss.on('connection', (ws, req) => {
                             });
                         }
                         
-                        // 4. Уведомляем ДРУГИХ о новом игроке ПОСЛЕ отправки списка
                         setTimeout(() => {
                             const sentCount = broadcastToGame(clientGameId, {
                                 type: PacketType.PLAYER_JOIN,
@@ -352,10 +335,10 @@ wss.on('connection', (ws, req) => {
                                 posZ: spawnPosition.z
                             }, clientOdilId);
                             
-                            console.log(`[WS] Notified ${sentCount} players about new player ${clientUsername}`);
+                            console.log(`[WS] Notified ${sentCount} players about ${clientUsername}`);
                         }, 100);
                         
-                    }, 200);  // 200ms задержка
+                    }, 200);
 
                     console.log(`[WS] ${clientGameId} now has ${game.players.size} players`);
                     break;
@@ -370,7 +353,6 @@ wss.on('connection', (ws, req) => {
                     const player = game.players.get(clientOdilId);
                     if (!player) break;
 
-                    // ИСПРАВЛЕНО: Валидация входных данных
                     const posX = typeof data.posX === 'number' && isFinite(data.posX) ? data.posX : player.position.x;
                     const posY = typeof data.posY === 'number' && isFinite(data.posY) ? data.posY : player.position.y;
                     const posZ = typeof data.posZ === 'number' && isFinite(data.posZ) ? data.posZ : player.position.z;
@@ -393,19 +375,12 @@ wss.on('connection', (ws, req) => {
                     player.isInWater = !!data.isInWater;
                     player.lastUpdate = Date.now();
 
-                    // Рассылаем ТОЛЬКО другим игрокам
                     broadcastToGame(clientGameId, {
                         type: PacketType.PLAYER_STATE,
                         odilId: clientOdilId,
-                        posX: posX,
-                        posY: posY,
-                        posZ: posZ,
-                        rotX: rotX,
-                        rotY: rotY,
-                        rotZ: rotZ,
-                        velX: velX,
-                        velY: velY,
-                        velZ: velZ,
+                        posX, posY, posZ,
+                        rotX, rotY, rotZ,
+                        velX, velY, velZ,
                         animationId: player.animationId,
                         isGrounded: player.isGrounded,
                         isJumping: player.isJumping,
@@ -415,19 +390,35 @@ wss.on('connection', (ws, req) => {
                     break;
                 }
 
+                // ═══════════════════════════════════════════════════════════
+                // CHAT MESSAGE - ИСПРАВЛЕНО
+                // ═══════════════════════════════════════════════════════════
                 case PacketType.CHAT_MESSAGE: {
-                    if (!clientGameId || !isConnected) break;
+                    if (!clientGameId || !clientOdilId || !isConnected) {
+                        console.log('[Chat] Rejected - not connected');
+                        break;
+                    }
 
-                    const safeMessage = (data.message || '').substring(0, 200);
+                    const message = (data.message || '').trim();
+                    if (!message || message.length === 0) {
+                        console.log('[Chat] Rejected - empty message');
+                        break;
+                    }
+
+                    const safeMessage = message.substring(0, 256);
+                    const safeUsername = clientUsername || `Player${clientOdilId}`;
                     
-                    broadcastToGame(clientGameId, {
+                    console.log(`[Chat] ${safeUsername} (#${clientOdilId}): ${safeMessage}`);
+
+                    // Отправляем ВСЕМ ДРУГИМ игрокам (исключая отправителя)
+                    const sentCount = broadcastToGame(clientGameId, {
                         type: PacketType.CHAT_MESSAGE,
                         odilId: clientOdilId,
-                        username: clientUsername,
+                        username: safeUsername,
                         message: safeMessage
-                    });
-                    
-                    console.log(`[Chat] ${clientUsername}: ${safeMessage}`);
+                    }, clientOdilId);  // <-- excludeOdilId = clientOdilId
+
+                    console.log(`[Chat] Sent to ${sentCount} other players`);
                     break;
                 }
 
@@ -448,7 +439,8 @@ wss.on('connection', (ws, req) => {
                 }
 
                 default:
-                    console.log(`[WS] Unknown packet type: ${data.type}`);
+                    // Игнорируем неизвестные пакеты
+                    break;
             }
         } catch (err) {
             console.error('[WS] Handle message error:', err);
@@ -459,12 +451,10 @@ wss.on('connection', (ws, req) => {
         try {
             const data = JSON.parse(message.toString());
             
-            // ВАЖНО: Для CONNECT_REQUEST обрабатываем синхронно через очередь
             if (data.type === PacketType.CONNECT_REQUEST) {
                 messageQueue.push(data);
                 processMessageQueue();
             } else {
-                // Остальные сообщения обрабатываем сразу
                 handleMessage(data);
             }
         } catch (err) {
@@ -488,7 +478,7 @@ wss.on('connection', (ws, req) => {
     });
 });
 
-// Пинг всех клиентов
+// Пинг клиентов
 const pingInterval = setInterval(() => {
     wss.clients.forEach((ws) => {
         if (ws.isAlive === false) {
@@ -504,7 +494,7 @@ wss.on('close', () => {
     clearInterval(pingInterval);
 });
 
-// Проверка таймаутов
+// Таймауты
 setInterval(() => {
     const now = Date.now();
     

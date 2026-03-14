@@ -5,11 +5,32 @@ console.clear();
 console.log('%cTUBLOX', 'font-size:48px;font-weight:800;color:#fff;');
 
 // ============================================
+// PacketTypes
+// ============================================
+const PacketType = {
+    CONNECT_REQUEST: 1,
+    CONNECT_RESPONSE: 2,
+    DISCONNECT: 3,
+    PING: 4,
+    PONG: 5,
+    PLAYER_JOIN: 10,
+    PLAYER_LEAVE: 11,
+    PLAYER_STATE: 12,
+    CHAT_MESSAGE: 30,
+    HOST_ASSIGN: 50,
+    BUILD_DATA: 51
+};
+
+// ============================================
 // Toast
 // ============================================
 function toast(msg, type = 'success') {
     let c = document.querySelector('.toast-container');
-    if (!c) { c = document.createElement('div'); c.className = 'toast-container'; document.body.appendChild(c); }
+    if (!c) { 
+        c = document.createElement('div'); 
+        c.className = 'toast-container'; 
+        document.body.appendChild(c); 
+    }
     const icon = type === 'success'
         ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>'
         : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
@@ -29,10 +50,11 @@ let currentGameId = null;
 // Game State
 let gameWS = null;
 let gameActive = false;
+let isConnecting = false; // Флаг чтобы не подключаться дважды
 let myOdilId = 0;
 let myPlayerId = 0;
 let isHost = false;
-let remotePlayers = {}; // odilId -> playerData
+let remotePlayers = {};
 let myPos = { x: 0, y: 5, z: 0 };
 let myRot = { x: 0, y: 0, z: 0 };
 let myVel = { x: 0, y: 0, z: 0 };
@@ -62,40 +84,58 @@ async function register(e) {
     e.preventDefault();
     const btn = e.target.querySelector('button');
     const html = btn.innerHTML;
-    btn.innerHTML = '<div class="loader"></div>'; btn.disabled = true;
+    btn.innerHTML = '<div class="loader"></div>'; 
+    btn.disabled = true;
     try {
         const res = await fetch('/api/register', {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            method: 'POST', 
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ 
                 username: document.getElementById('reg-username').value, 
                 password: document.getElementById('reg-password').value 
             })
         });
         const data = await res.json();
-        if (data.success) { toast(`Account created! ID: #${data.odilId}`); setTimeout(() => location.href = '/home', 1000); }
-        else { toast(data.message, 'error'); }
-    } catch { toast('Connection error', 'error'); }
-    btn.innerHTML = html; btn.disabled = false;
+        if (data.success) { 
+            toast(`Account created! ID: #${data.odilId}`); 
+            setTimeout(() => location.href = '/home', 1000); 
+        } else { 
+            toast(data.message, 'error'); 
+        }
+    } catch { 
+        toast('Connection error', 'error'); 
+    }
+    btn.innerHTML = html; 
+    btn.disabled = false;
 }
 
 async function login(e) {
     e.preventDefault();
     const btn = e.target.querySelector('button');
     const html = btn.innerHTML;
-    btn.innerHTML = '<div class="loader"></div>'; btn.disabled = true;
+    btn.innerHTML = '<div class="loader"></div>'; 
+    btn.disabled = true;
     try {
         const res = await fetch('/api/login', {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            method: 'POST', 
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ 
                 username: document.getElementById('login-username').value, 
                 password: document.getElementById('login-password').value 
             })
         });
         const data = await res.json();
-        if (data.success) { toast('Welcome back'); setTimeout(() => location.href = '/home', 600); }
-        else { toast(data.message, 'error'); }
-    } catch { toast('Connection error', 'error'); }
-    btn.innerHTML = html; btn.disabled = false;
+        if (data.success) { 
+            toast('Welcome back'); 
+            setTimeout(() => location.href = '/home', 600); 
+        } else { 
+            toast(data.message, 'error'); 
+        }
+    } catch { 
+        toast('Connection error', 'error'); 
+    }
+    btn.innerHTML = html; 
+    btn.disabled = false;
 }
 
 async function logout() { 
@@ -116,7 +156,9 @@ async function loadUser() {
             document.querySelectorAll('.username').forEach(el => el.textContent = data.user.username);
             document.querySelectorAll('.odil-id').forEach(el => el.textContent = `#${data.user.odilId}`);
         }
-    } catch (e) { console.error(e); }
+    } catch (e) { 
+        console.error(e); 
+    }
 }
 
 // ============================================
@@ -164,9 +206,14 @@ async function loadFeaturedGame() {
     try {
         const res = await fetch('/api/games?featured=true&limit=1');
         const data = await res.json();
-        if (data.success && data.games.length > 0) container.innerHTML = featuredGameHTML(data.games[0]);
-        else container.innerHTML = '<p class="no-content">No games available</p>';
-    } catch { container.innerHTML = '<p class="no-content">Error loading</p>'; }
+        if (data.success && data.games.length > 0) {
+            container.innerHTML = featuredGameHTML(data.games[0]);
+        } else {
+            container.innerHTML = '<p class="no-content">No games available</p>';
+        }
+    } catch { 
+        container.innerHTML = '<p class="no-content">Error loading</p>'; 
+    }
 }
 
 async function loadAllGames() {
@@ -175,9 +222,14 @@ async function loadAllGames() {
     try {
         const res = await fetch('/api/games');
         const data = await res.json();
-        if (data.success && data.games.length > 0) container.innerHTML = data.games.map(g => gameCardHTML(g, true)).join('');
-        else container.innerHTML = '<p class="no-content">No games available</p>';
-    } catch { container.innerHTML = '<p class="no-content">Error loading</p>'; }
+        if (data.success && data.games.length > 0) {
+            container.innerHTML = data.games.map(g => gameCardHTML(g, true)).join('');
+        } else {
+            container.innerHTML = '<p class="no-content">No games available</p>';
+        }
+    } catch { 
+        container.innerHTML = '<p class="no-content">Error loading</p>'; 
+    }
 }
 
 async function loadGamePage() {
@@ -212,7 +264,9 @@ async function loadGamePage() {
         } else {
             container.innerHTML = `<div class="not-found"><h2>Game not found</h2></div>`;
         }
-    } catch { container.innerHTML = '<p class="error">Error loading</p>'; }
+    } catch { 
+        container.innerHTML = '<p class="error">Error loading</p>'; 
+    }
 }
 
 // ============================================
@@ -226,7 +280,10 @@ function setLaunchState(state) {
 
 function openPlayModal() {
     const modal = document.getElementById('play-modal');
-    if (modal) { modal.classList.add('active'); setLaunchState('connecting'); }
+    if (modal) { 
+        modal.classList.add('active'); 
+        setLaunchState('connecting'); 
+    }
 }
 
 function closePlayModal() {
@@ -235,14 +292,24 @@ function closePlayModal() {
 }
 
 function playGame(gameId) {
-    if (!currentUser) { toast('Please log in', 'error'); return; }
+    if (!currentUser) { 
+        toast('Please log in', 'error'); 
+        return; 
+    }
+    
+    // Защита от двойного вызова
+    if (isConnecting || gameActive) {
+        console.log('[Game] Already connecting or active, ignoring');
+        return;
+    }
+    
     currentGameId = gameId;
     openPlayModal();
     connectToGame(gameId);
 }
 
 function retryPlay() {
-    if (currentGameId) {
+    if (currentGameId && !isConnecting) {
         setLaunchState('connecting');
         connectToGame(currentGameId);
     }
@@ -252,23 +319,61 @@ function retryPlay() {
 // WebSocket Connection
 // ============================================
 function connectToGame(gameId) {
+    // Защита от повторного подключения
+    if (isConnecting) {
+        console.log('[Game] Already connecting, ignoring');
+        return;
+    }
+    
+    isConnecting = true;
+    
+    // Закрываем старое соединение
     if (gameWS) {
+        gameWS.onclose = null; // Убираем обработчик чтобы не вызвать handleDisconnect
+        gameWS.onerror = null;
+        gameWS.onmessage = null;
+        gameWS.onopen = null;
         try { gameWS.close(); } catch {}
         gameWS = null;
     }
 
     const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const url = `${proto}//${location.host}`;
+    const url = `${proto}//${location.host}/ws`;
     console.log('[Game] Connecting:', url);
 
-    gameWS = new WebSocket(url);
+    try {
+        gameWS = new WebSocket(url);
+    } catch (err) {
+        console.error('[Game] WebSocket create error:', err);
+        isConnecting = false;
+        setLaunchState('error');
+        return;
+    }
+
+    const currentWS = gameWS; // Сохраняем ссылку
 
     gameWS.onopen = () => {
+        // Проверяем что это тот же WebSocket
+        if (gameWS !== currentWS) {
+            console.log('[Game] Stale WebSocket onopen, ignoring');
+            return;
+        }
+        
         console.log('[Game] WebSocket connected, joining game...');
-        gameWS.send(JSON.stringify({ type: 'join', gameId }));
+        
+        if (gameWS && gameWS.readyState === WebSocket.OPEN) {
+            gameWS.send(JSON.stringify({ 
+                type: PacketType.CONNECT_REQUEST,
+                odilId: myOdilId,
+                username: currentUser.username,
+                gameId: gameId
+            }));
+        }
     };
 
     gameWS.onmessage = (e) => {
+        if (gameWS !== currentWS) return;
+        
         try {
             const data = JSON.parse(e.data);
             handleGameMessage(data);
@@ -277,44 +382,59 @@ function connectToGame(gameId) {
         }
     };
 
-    gameWS.onclose = () => {
-        console.log('[Game] WebSocket closed');
-        if (gameActive) handleDisconnect('Connection lost');
+    gameWS.onclose = (e) => {
+        if (gameWS !== currentWS) return;
+        
+        console.log('[Game] WebSocket closed, code:', e.code);
+        isConnecting = false;
+        
+        if (gameActive) {
+            handleDisconnect('Connection lost');
+        }
     };
 
     gameWS.onerror = (e) => {
+        if (gameWS !== currentWS) return;
+        
         console.error('[Game] WebSocket error');
+        isConnecting = false;
         setLaunchState('error');
-        document.getElementById('error-message').textContent = 'Connection failed';
+        const errMsg = document.getElementById('error-message');
+        if (errMsg) errMsg.textContent = 'Connection failed';
     };
 }
 
 function handleGameMessage(data) {
     switch (data.type) {
-        case 'join_response':
+        case PacketType.CONNECT_RESPONSE:
+            isConnecting = false;
+            
             if (data.success) {
-                myPlayerId = data.playerId;
+                myPlayerId = data.odilId;
                 myOdilId = data.odilId;
                 isHost = data.isHost;
-                myPos = data.spawn || { x: 0, y: 5, z: 0 };
-                buildData = data.buildData;
+                myPos = { 
+                    x: data.spawnX || 0, 
+                    y: data.spawnY || 5, 
+                    z: data.spawnZ || 0 
+                };
                 
-                console.log('[Game] Joined!', { playerId: myPlayerId, isHost });
+                console.log('[Game] Joined!', { odilId: myOdilId, isHost });
                 setLaunchState('success');
                 setTimeout(() => enterGame(), 300);
             } else {
                 setLaunchState('error');
-                document.getElementById('error-message').textContent = data.message || 'Failed to join';
+                const errMsg = document.getElementById('error-message');
+                if (errMsg) errMsg.textContent = data.message || 'Failed to join';
             }
             break;
 
-        case 'player_joined':
+        case PacketType.PLAYER_JOIN:
             console.log('[Game] Player joined:', data.username);
             remotePlayers[data.odilId] = {
                 odilId: data.odilId,
                 username: data.username,
-                playerId: data.playerId,
-                position: data.position || { x: 0, y: 0, z: 0 },
+                position: { x: data.posX || 0, y: data.posY || 0, z: data.posZ || 0 },
                 rotation: { x: 0, y: 0, z: 0 },
                 velocity: { x: 0, y: 0, z: 0 },
                 animationId: 0
@@ -323,49 +443,46 @@ function handleGameMessage(data) {
             updateHUD();
             break;
 
-        case 'player_left':
+        case PacketType.PLAYER_LEAVE:
             if (remotePlayers[data.odilId]) {
-                addChat(null, `${data.username || remotePlayers[data.odilId].username} left`, true);
+                addChat(null, `${remotePlayers[data.odilId].username} left`, true);
                 delete remotePlayers[data.odilId];
                 updateHUD();
             }
             break;
 
-        case 'player_state':
-            if (remotePlayers[data.odilId]) {
+        case PacketType.PLAYER_STATE:
+            if (data.odilId !== myOdilId && remotePlayers[data.odilId]) {
                 const p = remotePlayers[data.odilId];
-                p.position = data.position || p.position;
-                p.rotation = data.rotation || p.rotation;
-                p.velocity = data.velocity || p.velocity;
+                p.position = { x: data.posX, y: data.posY, z: data.posZ };
+                p.rotation = { x: data.rotX || 0, y: data.rotY || 0, z: data.rotZ || 0 };
+                p.velocity = { x: data.velX || 0, y: data.velY || 0, z: data.velZ || 0 };
                 p.animationId = data.animationId ?? p.animationId;
                 renderPlayers();
             }
             break;
 
-        case 'players_update':
-            // Batch update
-            if (data.players) {
-                data.players.forEach(p => {
-                    if (p.odilId !== myOdilId && remotePlayers[p.odilId]) {
-                        Object.assign(remotePlayers[p.odilId], p);
-                    }
-                });
-                renderPlayers();
-            }
-            break;
-
-        case 'chat_message':
+        case PacketType.CHAT_MESSAGE:
             addChat(data.username, data.message, false);
             break;
 
-        case 'pong':
+        case PacketType.PONG:
             const ping = Date.now() - (data.clientTime || 0);
-            document.getElementById('hud-ping').textContent = `${ping}ms`;
+            const pingEl = document.getElementById('hud-ping');
+            if (pingEl) pingEl.textContent = `${ping}ms`;
             break;
 
-        case 'error':
-            console.error('[Game] Error:', data.message);
-            toast(data.message, 'error');
+        case PacketType.HOST_ASSIGN:
+            isHost = data.isHost;
+            console.log('[Game] Host status:', isHost);
+            const hudHost = document.getElementById('hud-host');
+            if (hudHost) hudHost.textContent = isHost ? '(Host)' : '';
+            updateHUD();
+            break;
+
+        case PacketType.BUILD_DATA:
+            buildData = data.buildData;
+            console.log('[Game] Received build data');
             break;
     }
 }
@@ -374,24 +491,38 @@ function handleGameMessage(data) {
 // Enter Game
 // ============================================
 function enterGame() {
+    // Защита от повторного входа
+    if (gameActive) {
+        console.log('[Game] Already in game, ignoring');
+        return;
+    }
+    
     console.log('[Game] Entering game');
     gameActive = true;
     closePlayModal();
 
-    document.getElementById('main-navbar').style.display = 'none';
-    document.getElementById('game-page').style.display = 'none';
-    document.getElementById('game-hud').classList.add('active');
+    const navbar = document.getElementById('main-navbar');
+    const gamePage = document.getElementById('game-page');
+    const hud = document.getElementById('game-hud');
+    
+    if (navbar) navbar.style.display = 'none';
+    if (gamePage) gamePage.style.display = 'none';
+    if (hud) hud.classList.add('active');
 
-    document.getElementById('hud-title').textContent = currentGameId || 'Game';
-    document.getElementById('hud-name').textContent = currentUser.username;
-    document.getElementById('hud-host').textContent = isHost ? '(Host)' : '';
+    const hudTitle = document.getElementById('hud-title');
+    const hudName = document.getElementById('hud-name');
+    const hudHost = document.getElementById('hud-host');
+    
+    if (hudTitle) hudTitle.textContent = currentGameId || 'Game';
+    if (hudName) hudName.textContent = currentUser.username;
+    if (hudHost) hudHost.textContent = isHost ? '(Host)' : '';
 
     addChat(null, 'Welcome to TuBlox!', true);
     addChat(null, `You are ${currentUser.username}` + (isHost ? ' (Host)' : ''), true);
 
     updateHUD();
     startGameLoop();
-    toast('Connected!');
+    toast('Connected! 🎮');
 }
 
 function startGameLoop() {
@@ -403,10 +534,16 @@ function startGameLoop() {
         if (!gameWS || gameWS.readyState !== WebSocket.OPEN || !gameActive) return;
         
         gameWS.send(JSON.stringify({
-            type: 'player_state',
-            position: myPos,
-            rotation: myRot,
-            velocity: myVel,
+            type: PacketType.PLAYER_STATE,
+            posX: myPos.x,
+            posY: myPos.y,
+            posZ: myPos.z,
+            rotX: myRot.x,
+            rotY: myRot.y,
+            rotZ: myRot.z,
+            velX: myVel.x,
+            velY: myVel.y,
+            velZ: myVel.z,
             isGrounded: true,
             isJumping: false,
             isSprinting: !!keys['shift'],
@@ -414,14 +551,19 @@ function startGameLoop() {
             animationId: isMoving() ? 1 : 0
         }));
 
-        document.getElementById('hud-coords').textContent = 
-            `${myPos.x.toFixed(1)}, ${myPos.y.toFixed(1)}, ${myPos.z.toFixed(1)}`;
+        const coordsEl = document.getElementById('hud-coords');
+        if (coordsEl) {
+            coordsEl.textContent = `${myPos.x.toFixed(1)}, ${myPos.y.toFixed(1)}, ${myPos.z.toFixed(1)}`;
+        }
     }, 50);
 
     // Ping every 2 sec
     pingInterval = setInterval(() => {
         if (gameWS && gameWS.readyState === WebSocket.OPEN) {
-            gameWS.send(JSON.stringify({ type: 'ping', clientTime: Date.now() }));
+            gameWS.send(JSON.stringify({ 
+                type: PacketType.PING, 
+                clientTime: Date.now() 
+            }));
         }
     }, 2000);
 }
@@ -436,7 +578,7 @@ function isMoving() {
 // ============================================
 function disconnectGame() {
     if (gameWS && gameWS.readyState === WebSocket.OPEN) {
-        gameWS.send(JSON.stringify({ type: 'leave' }));
+        gameWS.send(JSON.stringify({ type: PacketType.DISCONNECT }));
         gameWS.close();
     }
     handleDisconnect('Disconnected');
@@ -444,15 +586,22 @@ function disconnectGame() {
 
 function handleDisconnect(reason) {
     gameActive = false;
+    isConnecting = false;
+    
     if (stateInterval) { clearInterval(stateInterval); stateInterval = null; }
     if (pingInterval) { clearInterval(pingInterval); pingInterval = null; }
+    
     remotePlayers = {};
     gameWS = null;
     isHost = false;
 
-    document.getElementById('game-hud').classList.remove('active');
-    document.getElementById('main-navbar').style.display = '';
-    document.getElementById('game-page').style.display = '';
+    const hud = document.getElementById('game-hud');
+    const navbar = document.getElementById('main-navbar');
+    const gamePage = document.getElementById('game-page');
+    
+    if (hud) hud.classList.remove('active');
+    if (navbar) navbar.style.display = '';
+    if (gamePage) gamePage.style.display = '';
 
     toast(reason, 'error');
 }
@@ -469,8 +618,11 @@ function updateHUD() {
         }
         entries.innerHTML = html;
     }
+    
     const count = 1 + Object.keys(remotePlayers).length;
-    document.getElementById('hud-count').textContent = `${count} player${count !== 1 ? 's' : ''}`;
+    const countEl = document.getElementById('hud-count');
+    if (countEl) countEl.textContent = `${count} player${count !== 1 ? 's' : ''}`;
+    
     renderPlayers();
 }
 
@@ -510,8 +662,11 @@ function addChat(sender, message, system) {
     if (!c) return;
     const el = document.createElement('div');
     el.className = 'hud-chat-msg' + (system ? ' system' : '');
-    if (system) el.textContent = `* ${message}`;
-    else el.innerHTML = `<span class="name">${escapeHtml(sender)}:</span> ${escapeHtml(message)}`;
+    if (system) {
+        el.textContent = `* ${message}`;
+    } else {
+        el.innerHTML = `<span class="name">${escapeHtml(sender)}:</span> ${escapeHtml(message)}`;
+    }
     c.appendChild(el);
     c.scrollTop = c.scrollHeight;
     while (c.children.length > 100) c.removeChild(c.firstChild);
@@ -519,9 +674,15 @@ function addChat(sender, message, system) {
 
 function sendChat() {
     const input = document.getElementById('hud-chat-input');
+    if (!input) return;
+    
     const msg = input.value.trim();
-    if (!msg || !gameWS) return;
-    gameWS.send(JSON.stringify({ type: 'chat', message: msg }));
+    if (!msg || !gameWS || gameWS.readyState !== WebSocket.OPEN) return;
+    
+    gameWS.send(JSON.stringify({ 
+        type: PacketType.CHAT_MESSAGE, 
+        message: msg 
+    }));
     input.value = '';
 }
 
@@ -529,7 +690,10 @@ function sendChat() {
 // Input
 // ============================================
 document.addEventListener('keydown', (e) => {
-    if (document.activeElement?.id === 'hud-chat-input') return;
+    if (document.activeElement?.id === 'hud-chat-input') {
+        if (e.key === 'Enter') sendChat();
+        return;
+    }
     keys[e.key.toLowerCase()] = true;
 });
 
@@ -561,11 +725,18 @@ async function loadUsers() {
             grid.innerHTML = data.users.map(u => `
                 <div class="user-card" onclick="location.href='/user/${u.odilId}'">
                     <div class="user-avatar"></div>
-                    <div class="user-info"><div class="user-name">${u.username}</div><div class="user-id">#${u.odilId}</div></div>
+                    <div class="user-info">
+                        <div class="user-name">${u.username}</div>
+                        <div class="user-id">#${u.odilId}</div>
+                    </div>
                     <div class="user-level">Lv.${u.gameData.level}</div>
                 </div>`).join('');
-        } else grid.innerHTML = '<p class="no-content">No players</p>';
-    } catch { grid.innerHTML = '<p class="no-content">Error</p>'; }
+        } else {
+            grid.innerHTML = '<p class="no-content">No players</p>';
+        }
+    } catch { 
+        grid.innerHTML = '<p class="no-content">Error</p>'; 
+    }
 }
 
 async function loadProfile() {
@@ -582,9 +753,27 @@ async function loadProfile() {
                     <div class="profile-avatar"></div>
                     <h1 class="profile-name">${u.username}</h1>
                     <div class="profile-id">#${u.odilId}</div>
+                </div>
+                <div class="profile-stats">
+                    <div class="card profile-stat">
+                        <div class="profile-stat-value">${u.gameData.level}</div>
+                        <div class="profile-stat-label">Level</div>
+                    </div>
+                    <div class="card profile-stat">
+                        <div class="profile-stat-value">${u.gameData.coins}</div>
+                        <div class="profile-stat-label">Coins</div>
+                    </div>
+                    <div class="card profile-stat">
+                        <div class="profile-stat-value">${Math.floor(u.gameData.playTime / 60)}h</div>
+                        <div class="profile-stat-label">Play Time</div>
+                    </div>
                 </div>`;
-        } else content.innerHTML = '<div class="not-found"><h2>Not found</h2></div>';
-    } catch { content.innerHTML = '<p class="error">Error</p>'; }
+        } else {
+            content.innerHTML = '<div class="not-found"><h2>Not found</h2></div>';
+        }
+    } catch { 
+        content.innerHTML = '<p class="error">Error</p>'; 
+    }
 }
 
 // ============================================
@@ -606,18 +795,54 @@ function escapeHtml(text) {
 // Init
 // ============================================
 document.addEventListener('DOMContentLoaded', () => {
+    // Auth page
     if (document.querySelector('.auth-tabs')) {
         initTabs();
         document.getElementById('register-form')?.addEventListener('submit', register);
         document.getElementById('login-form')?.addEventListener('submit', login);
     }
-    if (document.querySelector('.home-page')) { loadUser(); loadFeaturedGame(); document.getElementById('logout-btn')?.addEventListener('click', logout); }
-    if (document.querySelector('.games-page')) { loadUser(); loadAllGames(); document.getElementById('logout-btn')?.addEventListener('click', logout); }
-    if (document.querySelector('.game-page')) { loadUser(); loadGamePage(); document.getElementById('logout-btn')?.addEventListener('click', logout); }
-    if (document.querySelector('.users-page')) { loadUser(); loadUsers(); }
-    if (document.querySelector('.profile-page')) { loadUser(); loadProfile(); }
     
+    // Home page
+    if (document.querySelector('.home-page')) { 
+        loadUser(); 
+        loadFeaturedGame(); 
+        document.getElementById('logout-btn')?.addEventListener('click', logout); 
+    }
+    
+    // Games page
+    if (document.querySelector('.games-page')) { 
+        loadUser(); 
+        loadAllGames(); 
+        document.getElementById('logout-btn')?.addEventListener('click', logout); 
+    }
+    
+    // Game page
+    if (document.querySelector('.game-page')) { 
+        loadUser(); 
+        loadGamePage(); 
+        document.getElementById('logout-btn')?.addEventListener('click', logout); 
+    }
+    
+    // Users page
+    if (document.querySelector('.users-page')) { 
+        loadUser(); 
+        loadUsers(); 
+    }
+    
+    // Profile page
+    if (document.querySelector('.profile-page')) { 
+        loadUser(); 
+        loadProfile(); 
+    }
+    
+    // Modal close
     document.querySelectorAll('.modal-backdrop').forEach(el => {
         el.onclick = () => el.closest('.modal')?.classList.remove('active');
     });
+    
+    // Disconnect button
+    const disconnectBtn = document.getElementById('hud-disconnect');
+    if (disconnectBtn) {
+        disconnectBtn.addEventListener('click', disconnectGame);
+    }
 });

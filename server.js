@@ -1,4 +1,4 @@
-// server.js - TuBlox с пагинацией (3 игры на страницу)
+// server.js - ИСПРАВЛЕННАЯ ВЕРСИЯ С ЧАТОМ
 
 require('dotenv').config();
 const express = require('express');
@@ -227,7 +227,7 @@ wss.on('connection', (ws, req) => {
                     }
 
                     clientOdilId = data.odilId;
-                    clientGameId = data.gameId || 'baseplate';
+                    clientGameId = data.gameId || 'tublox-world';
                     clientUsername = (data.username || `Player${clientOdilId}`).substring(0, 32);
 
                     console.log(`[WS] Connect: ${clientUsername} (#${clientOdilId}) -> ${clientGameId}`);
@@ -313,6 +313,8 @@ wss.on('connection', (ws, req) => {
                         if (ws.readyState !== WebSocket.OPEN) return;
                         
                         for (const player of existingPlayers) {
+                            console.log(`[WS] Sending existing player ${player.username} to ${clientUsername}`);
+                            
                             sendToClient(ws, {
                                 type: PacketType.PLAYER_JOIN,
                                 odilId: player.odilId,
@@ -324,7 +326,7 @@ wss.on('connection', (ws, req) => {
                         }
                         
                         setTimeout(() => {
-                            broadcastToGame(clientGameId, {
+                            const sentCount = broadcastToGame(clientGameId, {
                                 type: PacketType.PLAYER_JOIN,
                                 odilId: clientOdilId,
                                 username: clientUsername,
@@ -332,6 +334,8 @@ wss.on('connection', (ws, req) => {
                                 posY: spawnPosition.y,
                                 posZ: spawnPosition.z
                             }, clientOdilId);
+                            
+                            console.log(`[WS] Notified ${sentCount} players about ${clientUsername}`);
                         }, 100);
                         
                     }, 200);
@@ -386,23 +390,35 @@ wss.on('connection', (ws, req) => {
                     break;
                 }
 
+                // ═══════════════════════════════════════════════════════════
+                // CHAT MESSAGE - ИСПРАВЛЕНО
+                // ═══════════════════════════════════════════════════════════
                 case PacketType.CHAT_MESSAGE: {
-                    if (!clientGameId || !clientOdilId || !isConnected) break;
+                    if (!clientGameId || !clientOdilId || !isConnected) {
+                        console.log('[Chat] Rejected - not connected');
+                        break;
+                    }
 
                     const message = (data.message || '').trim();
-                    if (!message || message.length === 0) break;
+                    if (!message || message.length === 0) {
+                        console.log('[Chat] Rejected - empty message');
+                        break;
+                    }
 
                     const safeMessage = message.substring(0, 256);
                     const safeUsername = clientUsername || `Player${clientOdilId}`;
                     
-                    console.log(`[Chat] ${safeUsername}: ${safeMessage}`);
+                    console.log(`[Chat] ${safeUsername} (#${clientOdilId}): ${safeMessage}`);
 
-                    broadcastToGame(clientGameId, {
+                    // Отправляем ВСЕМ ДРУГИМ игрокам (исключая отправителя)
+                    const sentCount = broadcastToGame(clientGameId, {
                         type: PacketType.CHAT_MESSAGE,
                         odilId: clientOdilId,
                         username: safeUsername,
                         message: safeMessage
-                    }, clientOdilId);
+                    }, clientOdilId);  // <-- excludeOdilId = clientOdilId
+
+                    console.log(`[Chat] Sent to ${sentCount} other players`);
                     break;
                 }
 
@@ -416,10 +432,15 @@ wss.on('connection', (ws, req) => {
                 }
 
                 case PacketType.DISCONNECT: {
+                    console.log(`[WS] Disconnect request from ${clientUsername}`);
                     isConnected = false;
                     ws.close(1000, 'Client disconnect');
                     break;
                 }
+
+                default:
+                    // Игнорируем неизвестные пакеты
+                    break;
             }
         } catch (err) {
             console.error('[WS] Handle message error:', err);
@@ -457,9 +478,11 @@ wss.on('connection', (ws, req) => {
     });
 });
 
+// Пинг клиентов
 const pingInterval = setInterval(() => {
     wss.clients.forEach((ws) => {
         if (ws.isAlive === false) {
+            console.log('[WS] Terminating dead connection');
             return ws.terminate();
         }
         ws.isAlive = false;
@@ -471,6 +494,7 @@ wss.on('close', () => {
     clearInterval(pingInterval);
 });
 
+// Таймауты
 setInterval(() => {
     const now = Date.now();
     
@@ -479,6 +503,7 @@ setInterval(() => {
         
         game.players.forEach((player, odilId) => {
             if (now - player.lastUpdate > 60000) {
+                console.log(`[WS] Timeout: ${player.username} in ${gameId}`);
                 toRemove.push(odilId);
             }
         });
@@ -552,7 +577,6 @@ const gameSchema = new mongoose.Schema({
     creatorId: { type: Number },
     thumbnail: { type: String, default: '' },
     featured: { type: Boolean, default: false },
-    category: { type: String, default: 'other' },
     visits: { type: Number, default: 0 },
     activePlayers: { type: Number, default: 0 },
     maxPlayers: { type: Number, default: 50 },
@@ -1157,64 +1181,25 @@ app.post('/api/logout', (req, res) => {
 });
 
 // ═══════════════════════════════════════════════════════════════
-// API - GAMES (С ПАГИНАЦИЕЙ)
+// API - GAMES
 // ═══════════════════════════════════════════════════════════════
 
 app.get('/api/games', async (req, res) => {
     try {
-        const { 
-            featured, 
-            category,
-            page = 1, 
-            limit = 3
-        } = req.query;
-        
-        const pageNum = Math.max(1, parseInt(page) || 1);
-        const limitNum = Math.min(12, Math.max(1, parseInt(limit) || 3));
-        const skip = (pageNum - 1) * limitNum;
+        const { featured, limit } = req.query;
         
         let query = {};
-        
         if (featured === 'true') {
             query.featured = true;
         }
         
-        if (category && category !== 'all') {
-            query.category = category;
-        }
-        
-        const totalGames = await Game.countDocuments(query);
-        const totalPages = Math.ceil(totalGames / limitNum);
-        
         const games = await Game.find(query)
             .select('-buildData')
             .sort({ featured: -1, visits: -1 })
-            .skip(skip)
-            .limit(limitNum);
+            .limit(parseInt(limit) || 50);
         
-        // Обновляем activePlayers из памяти
-        const gamesWithPlayers = games.map(g => {
-            const gameServer = gameServers.get(g.id);
-            return {
-                ...g.toObject(),
-                activePlayers: gameServer ? gameServer.players.size : 0
-            };
-        });
-        
-        res.json({ 
-            success: true, 
-            games: gamesWithPlayers,
-            pagination: {
-                currentPage: pageNum,
-                totalPages: totalPages,
-                totalGames: totalGames,
-                gamesPerPage: limitNum,
-                hasNextPage: pageNum < totalPages,
-                hasPrevPage: pageNum > 1
-            }
-        });
+        res.json({ success: true, games });
     } catch (err) {
-        console.error('[API] Games error:', err);
         res.status(500).json({ success: false, message: 'Server error' });
     }
 });
@@ -1227,16 +1212,7 @@ app.get('/api/game/:id', async (req, res) => {
             return res.status(404).json({ success: false, message: 'Game not found' });
         }
         
-        const gameServer = gameServers.get(req.params.id);
-        const activePlayers = gameServer ? gameServer.players.size : 0;
-        
-        res.json({ 
-            success: true, 
-            game: {
-                ...game.toObject(),
-                activePlayers
-            }
-        });
+        res.json({ success: true, game });
     } catch (err) {
         res.status(500).json({ success: false, message: 'Server error' });
     }
@@ -1345,7 +1321,7 @@ app.get('/api/game/validate/:token', async (req, res) => {
         if (game && game.buildData) {
             response.buildData = game.buildData;
         } else {
-            response.buildData = baseplateBuildData;
+            response.buildData = defaultWorldBuildData;
         }
         
         res.json(response);

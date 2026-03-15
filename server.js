@@ -1,4 +1,4 @@
-// server.js - ИСПРАВЛЕННАЯ ВЕРСИЯ С ЧАТОМ
+// server.js - ПОЛНАЯ ВЕРСИЯ С TUFORUMS
 
 require('dotenv').config();
 const express = require('express');
@@ -14,6 +14,200 @@ const WebSocket = require('ws');
 
 const app = express();
 const server = http.createServer(app);
+
+// ═══════════════════════════════════════════════════════════════
+// BANNED WORDS & DOMAIN PATTERNS
+// ═══════════════════════════════════════════════════════════════
+
+const BANNED_WORDS = [
+    // English profanity
+    'fuck', 'fucking', 'fucker', 'fucked', 'fuk', 'fck', 'fuk', 'phuck',
+    'shit', 'shitting', 'shitty', 'crap', 'bullshit',
+    'bitch', 'bitching', 'bastard', 'whore', 'slut', 'hoe',
+    'ass', 'asshole', 'arse', 'arsehole', 'butt', 'butthole',
+    'dick', 'cock', 'penis', 'prick', 'dong', 'schlong',
+    'pussy', 'vagina', 'cunt', 'twat', 'beaver',
+    'tits', 'boobs', 'titties', 'breasts', 'nipple',
+    'porn', 'porno', 'pornography', 'xxx', 'nsfw',
+    'sex', 'sexy', 'sexual', 'rape', 'molest',
+    'nude', 'naked', 'nudes', 'strip', 'stripper',
+    'nigger', 'nigga', 'negro', 'nig', 'nigg',
+    'faggot', 'fag', 'homo', 'queer', 'gay', 'lesbian', 'tranny',
+    'retard', 'retarded', 'idiot', 'moron', 'stupid',
+    'kill', 'murder', 'suicide', 'kms', 'kys', 'die', 'death',
+    'nazi', 'hitler', 'holocaust', 'terrorist', 'terrorism',
+    'bomb', 'bombing', 'attack', 'shooter', 'shooting',
+    'drug', 'drugs', 'cocaine', 'heroin', 'meth', 'weed', 'marijuana',
+    'crack', 'lsd', 'ecstasy', 'molly', 'pills',
+    
+    // System/Admin words
+    'admin', 'administrator', 'moderator', 'mod', 'staff', 'owner',
+    'official', 'tublox', 'system', 'support', 'help', 'bot',
+    'server', 'console', 'root', 'superuser', 'sysadmin',
+    
+    // Russian profanity
+    'хуй', 'хуя', 'хуи', 'хую', 'хуё', 'хуе', 'хер', 'хрен',
+    'пизд', 'пизде', 'пизду', 'пиздец', 'пиздюк', 'писюн',
+    'ебл', 'ебал', 'ебать', 'ебу', 'ебёт', 'ебет', 'ебля', 'еби',
+    'ебан', 'ебануть', 'ебанутый', 'ебаный', 'наебать', 'проебать',
+    'блят', 'блядь', 'бляд', 'блять', 'блять', 'бля',
+    'сука', 'суки', 'суку', 'сучка', 'сучий',
+    'член', 'члена', 'члену', 'членом',
+    'жопа', 'жопу', 'жопой', 'жопе', 'жоп',
+    'залупа', 'залупы', 'залупу',
+    'мудак', 'мудака', 'мудаков', 'мудила', 'мудило',
+    'гандон', 'гондон', 'презерватив',
+    'шлюха', 'шлюхи', 'шлюху', 'шалава', 'путана',
+    'курва', 'курвы', 'курву',
+    'педик', 'педики', 'педиков', 'пидор', 'пидорас', 'пидр',
+    'гей', 'геи', 'гея', 'лесби', 'лесбиянка', 'трансвестит',
+    'дебил', 'дебилы', 'дебила', 'дебилизм',
+    'идиот', 'идиота', 'идиоты', 'идиотизм',
+    'даун', 'дауны', 'дауна',
+    'порно', 'порнуха', 'порнография',
+    'секс', 'сексом', 'сексуальный',
+    'трах', 'трахать', 'трахал', 'трахнуть',
+    'ссал', 'ссать', 'ссу', 'ссыт',
+    'срал', 'срать', 'сру', 'срёт', 'срет',
+    'говно', 'говна', 'говну', 'гавно',
+    'дерьмо', 'дерьма', 'дерьму',
+    'убить', 'убийство', 'убийца',
+    'террор', 'терроризм', 'террорист',
+    'взрыв', 'взрывать', 'бомба', 'бомбить',
+    'наркот', 'наркота', 'наркотик', 'наркоман',
+    'героин', 'кокаин', 'план', 'травка', 'анаша', 'спайс',
+    'админ', 'модер', 'модератор', 'персонал', 'поддержка', 'владелец',
+    'p0rn', 's3x', 'fvck', 'fuk', 'azz', 'd1ck', 'b1tch',
+    'хyй', 'пиzда', 'блyть', 'сyка'
+];
+
+const DOMAIN_PATTERNS = [
+    '.com', '.net', '.org', '.ru', '.info', '.biz', '.co', '.io', '.gg',
+    '.me', '.tv', '.cc', '.us', '.uk', '.de', '.fr', '.it', '.es', '.cn',
+    '.jp', '.kr', '.in', '.au', '.ca', '.br', '.mx', '.nl', '.se', '.no',
+    '.dk', '.fi', '.pl', '.cz', '.at', '.ch', '.be', '.pt', '.gr', '.tr',
+    '.xyz', '.online', '.site', '.website', '.store', '.app', '.dev', '.ai',
+    '.tech', '.pro', '.club', '.vip', '.lol', '.game', '.games', '.fun',
+    '.zone', '.space', '.live', '.world', '.today', '.life', '.link',
+    'http://', 'https://', 'www.', 'ftp://', '://', 'discord.gg',
+    'bit.ly', 't.me', 'youtu.be', 'goo.gl', 'tinyurl'
+];
+
+// ═══════════════════════════════════════════════════════════════
+// STAFF USERS
+// ═══════════════════════════════════════════════════════════════
+
+const STAFF_USERNAMES = ['today_idk'];
+
+function isStaffUser(username) {
+    if (!username) return false;
+    return STAFF_USERNAMES.includes(username.toLowerCase());
+}
+
+// ═══════════════════════════════════════════════════════════════
+// VALIDATION & CENSORSHIP FUNCTIONS
+// ═══════════════════════════════════════════════════════════════
+
+function validateUsername(username) {
+    if (!username || typeof username !== 'string') {
+        return { valid: false, error: 'Username is required' };
+    }
+
+    username = username.trim();
+    
+    if (username.length < 3) {
+        return { valid: false, error: 'Username must be at least 3 characters' };
+    }
+    
+    if (username.length > 20) {
+        return { valid: false, error: 'Username must be 20 characters or less' };
+    }
+    
+    const formatRegex = /^[a-zA-Z0-9_]+$/;
+    if (!formatRegex.test(username)) {
+        return { valid: false, error: 'Username can only contain letters, numbers and underscore' };
+    }
+    
+    if (/__/.test(username)) {
+        return { valid: false, error: 'Username cannot contain consecutive underscores' };
+    }
+    
+    if (username.startsWith('_') || username.endsWith('_')) {
+        return { valid: false, error: 'Username cannot start or end with underscore' };
+    }
+    
+    if (/(.)\1{3,}/.test(username)) {
+        return { valid: false, error: 'Username contains too many repeated characters' };
+    }
+    
+    const lowerUsername = username.toLowerCase();
+    
+    for (const pattern of DOMAIN_PATTERNS) {
+        if (lowerUsername.includes(pattern.toLowerCase())) {
+            return { valid: false, error: 'Username cannot contain links or domains' };
+        }
+    }
+    
+    for (const word of BANNED_WORDS) {
+        if (lowerUsername.includes(word.toLowerCase())) {
+            return { valid: false, error: 'Username contains inappropriate content' };
+        }
+    }
+    
+    const leetspeakMap = {
+        '0': 'o', '1': 'i', '3': 'e', '4': 'a', '5': 's',
+        '7': 't', '8': 'b', '@': 'a', '$': 's', '!': 'i'
+    };
+    
+    let normalizedUsername = lowerUsername;
+    for (const [leet, normal] of Object.entries(leetspeakMap)) {
+        normalizedUsername = normalizedUsername.replace(new RegExp(leet, 'g'), normal);
+    }
+    
+    for (const word of BANNED_WORDS) {
+        if (normalizedUsername.includes(word.toLowerCase())) {
+            return { valid: false, error: 'Username contains inappropriate content' };
+        }
+    }
+    
+    const bypassPatterns = [
+        /p+o+r+n+/i, /s+e+x+/i, /f+u+c+k+/i, /d+i+c+k+/i,
+        /a+s+s+/i, /b+i+t+c+h+/i, /n+i+g+g+/i,
+        /х+у+й+/i, /п+и+з+д+/i, /е+б+л+/i, /б+л+я+т+/i
+    ];
+    
+    for (const pattern of bypassPatterns) {
+        if (pattern.test(username)) {
+            return { valid: false, error: 'Username contains inappropriate content' };
+        }
+    }
+    
+    const suspiciousChars = /[ΑΒΕΖΗΙΚΜΝΟΡΤΥΧ]/i;
+    if (suspiciousChars.test(username)) {
+        return { valid: false, error: 'Username contains invalid characters' };
+    }
+    
+    return { valid: true };
+}
+
+function censorText(text) {
+    if (!text) return '';
+    
+    let censored = text;
+    
+    for (const word of BANNED_WORDS) {
+        const regex = new RegExp(word, 'gi');
+        censored = censored.replace(regex, '*'.repeat(word.length));
+    }
+    
+    for (const pattern of DOMAIN_PATTERNS) {
+        const escaped = pattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const regex = new RegExp(escaped, 'gi');
+        censored = censored.replace(regex, '[link]');
+    }
+    
+    return censored;
+}
 
 // ═══════════════════════════════════════════════════════════════
 // KEEP ALIVE
@@ -40,7 +234,8 @@ app.get('/api/health', (req, res) => {
         status: 'ok', 
         uptime: process.uptime(),
         games: gameServers.size,
-        connections: connectedClients.size
+        connections: connectedClients.size,
+        forumClients: forumClients.size
     });
 });
 
@@ -55,7 +250,9 @@ const wss = new WebSocket.Server({
 
 const gameServers = new Map();
 const connectedClients = new Map();
+const forumClients = new Set();
 
+// Game Packet Types
 const PacketType = {
     CONNECT_REQUEST: 1,
     CONNECT_RESPONSE: 2,
@@ -75,6 +272,23 @@ const PacketType = {
     HOST_ASSIGN: 50,
     BUILD_DATA: 51,
     SERVER_INFO: 52
+};
+
+// Forum Packet Types
+const ForumPacketType = {
+    FORUM_CONNECT: 100,
+    FORUM_DISCONNECT: 101,
+    FORUM_GET_POSTS: 102,
+    FORUM_POSTS_LIST: 103,
+    FORUM_NEW_POST: 104,
+    FORUM_POST_CREATED: 105,
+    FORUM_NEW_REPLY: 106,
+    FORUM_POST_UPDATED: 107,
+    FORUM_LIKE_POST: 108,
+    FORUM_DELETE_POST: 109,
+    FORUM_POST_DELETED: 110,
+    FORUM_PIN_POST: 111,
+    FORUM_ERROR: 199
 };
 
 function sendToClient(ws, data) {
@@ -115,6 +329,19 @@ function broadcastToGame(gameId, data, excludeOdilId = null) {
     });
     
     return sentCount;
+}
+
+function broadcastToForum(data, excludeWs = null) {
+    const message = JSON.stringify(data);
+    forumClients.forEach(client => {
+        if (client !== excludeWs && client.readyState === WebSocket.OPEN) {
+            try {
+                client.send(message);
+            } catch (err) {
+                console.error('[Forum] Broadcast error:', err.message);
+            }
+        }
+    });
 }
 
 function getOrCreateGameServer(gameId) {
@@ -174,6 +401,10 @@ function removePlayerFromGame(gameId, odilId) {
     console.log(`[WS] ${gameId} now has ${game.players.size} players`);
 }
 
+// ═══════════════════════════════════════════════════════════════
+// WEBSOCKET CONNECTION HANDLER
+// ═══════════════════════════════════════════════════════════════
+
 wss.on('connection', (ws, req) => {
     let clientOdilId = null;
     let clientGameId = null;
@@ -186,6 +417,9 @@ wss.on('connection', (ws, req) => {
     console.log(`[WS] New connection from ${clientIp}`);
 
     ws.isAlive = true;
+    ws.isForumClient = false;
+    ws.forumUser = null;
+    
     ws.on('pong', () => { ws.isAlive = true; });
 
     async function processMessageQueue() {
@@ -203,6 +437,19 @@ wss.on('connection', (ws, req) => {
 
     async function handleMessage(data) {
         try {
+            // ═══════════════════════════════════════════════════════════
+            // FORUM PACKETS (100-199)
+            // ═══════════════════════════════════════════════════════════
+            
+            if (data.type >= 100 && data.type < 200) {
+                await handleForumMessage(data);
+                return;
+            }
+            
+            // ═══════════════════════════════════════════════════════════
+            // GAME PACKETS
+            // ═══════════════════════════════════════════════════════════
+            
             switch (data.type) {
                 case PacketType.CONNECT_REQUEST: {
                     if (!data.odilId || typeof data.odilId !== 'number') {
@@ -313,8 +560,6 @@ wss.on('connection', (ws, req) => {
                         if (ws.readyState !== WebSocket.OPEN) return;
                         
                         for (const player of existingPlayers) {
-                            console.log(`[WS] Sending existing player ${player.username} to ${clientUsername}`);
-                            
                             sendToClient(ws, {
                                 type: PacketType.PLAYER_JOIN,
                                 odilId: player.odilId,
@@ -326,7 +571,7 @@ wss.on('connection', (ws, req) => {
                         }
                         
                         setTimeout(() => {
-                            const sentCount = broadcastToGame(clientGameId, {
+                            broadcastToGame(clientGameId, {
                                 type: PacketType.PLAYER_JOIN,
                                 odilId: clientOdilId,
                                 username: clientUsername,
@@ -334,8 +579,6 @@ wss.on('connection', (ws, req) => {
                                 posY: spawnPosition.y,
                                 posZ: spawnPosition.z
                             }, clientOdilId);
-                            
-                            console.log(`[WS] Notified ${sentCount} players about ${clientUsername}`);
                         }, 100);
                         
                     }, 200);
@@ -390,35 +633,27 @@ wss.on('connection', (ws, req) => {
                     break;
                 }
 
-                // ═══════════════════════════════════════════════════════════
-                // CHAT MESSAGE - ИСПРАВЛЕНО
-                // ═══════════════════════════════════════════════════════════
                 case PacketType.CHAT_MESSAGE: {
                     if (!clientGameId || !clientOdilId || !isConnected) {
-                        console.log('[Chat] Rejected - not connected');
                         break;
                     }
 
                     const message = (data.message || '').trim();
                     if (!message || message.length === 0) {
-                        console.log('[Chat] Rejected - empty message');
                         break;
                     }
 
-                    const safeMessage = message.substring(0, 256);
+                    const safeMessage = censorText(message.substring(0, 256));
                     const safeUsername = clientUsername || `Player${clientOdilId}`;
                     
                     console.log(`[Chat] ${safeUsername} (#${clientOdilId}): ${safeMessage}`);
 
-                    // Отправляем ВСЕМ ДРУГИМ игрокам (исключая отправителя)
-                    const sentCount = broadcastToGame(clientGameId, {
+                    broadcastToGame(clientGameId, {
                         type: PacketType.CHAT_MESSAGE,
                         odilId: clientOdilId,
                         username: safeUsername,
                         message: safeMessage
-                    }, clientOdilId);  // <-- excludeOdilId = clientOdilId
-
-                    console.log(`[Chat] Sent to ${sentCount} other players`);
+                    }, clientOdilId);
                     break;
                 }
 
@@ -439,13 +674,284 @@ wss.on('connection', (ws, req) => {
                 }
 
                 default:
-                    // Игнорируем неизвестные пакеты
                     break;
             }
         } catch (err) {
             console.error('[WS] Handle message error:', err);
         }
     }
+
+    // ═══════════════════════════════════════════════════════════════
+    // FORUM MESSAGE HANDLER
+    // ═══════════════════════════════════════════════════════════════
+    
+    async function handleForumMessage(data) {
+        try {
+            switch (data.type) {
+                case ForumPacketType.FORUM_CONNECT: {
+                    forumClients.add(ws);
+                    ws.isForumClient = true;
+                    ws.forumUser = {
+                        odilId: data.odilId,
+                        username: data.username
+                    };
+                    console.log(`[Forum] Client connected: ${data.username} (#${data.odilId}). Total: ${forumClients.size}`);
+                    break;
+                }
+                
+                case ForumPacketType.FORUM_DISCONNECT: {
+                    forumClients.delete(ws);
+                    ws.isForumClient = false;
+                    ws.forumUser = null;
+                    console.log(`[Forum] Client disconnected. Total: ${forumClients.size}`);
+                    break;
+                }
+                
+                case ForumPacketType.FORUM_GET_POSTS: {
+                    try {
+                        const filter = {};
+                        if (data.category && data.category !== 'all') {
+                            filter.category = data.category;
+                        }
+                        
+                        const posts = await ForumPost.find(filter)
+                            .sort({ isPinned: -1, createdAt: -1 })
+                            .limit(50)
+                            .lean();
+                        
+                        sendToClient(ws, {
+                            type: ForumPacketType.FORUM_POSTS_LIST,
+                            posts: posts
+                        });
+                    } catch (err) {
+                        console.error('[Forum] Get posts error:', err);
+                        sendToClient(ws, { 
+                            type: ForumPacketType.FORUM_ERROR, 
+                            message: 'Failed to load posts' 
+                        });
+                    }
+                    break;
+                }
+                
+                case ForumPacketType.FORUM_NEW_POST: {
+                    if (!ws.forumUser) {
+                        sendToClient(ws, { 
+                            type: ForumPacketType.FORUM_ERROR, 
+                            message: 'Not authenticated' 
+                        });
+                        break;
+                    }
+                    
+                    const content = (data.content || '').trim();
+                    if (!content || content.length === 0) {
+                        sendToClient(ws, { 
+                            type: ForumPacketType.FORUM_ERROR, 
+                            message: 'Content required' 
+                        });
+                        break;
+                    }
+                    
+                    if (content.length > 2000) {
+                        sendToClient(ws, { 
+                            type: ForumPacketType.FORUM_ERROR, 
+                            message: 'Content too long (max 2000)' 
+                        });
+                        break;
+                    }
+                    
+                    try {
+                        const isStaff = isStaffUser(ws.forumUser.username);
+                        const censoredContent = censorText(content);
+                        
+                        const post = new ForumPost({
+                            author: ws.forumUser.username,
+                            authorId: ws.forumUser.odilId,
+                            content: censoredContent,
+                            category: data.category || 'general',
+                            isStaffPost: isStaff && data.isStaffPost === true,
+                            isPinned: isStaff && data.isPinned === true
+                        });
+                        
+                        await post.save();
+                        
+                        const savedPost = post.toObject();
+                        
+                        broadcastToForum({
+                            type: ForumPacketType.FORUM_POST_CREATED,
+                            post: savedPost
+                        });
+                        
+                        console.log(`[Forum] New post by ${ws.forumUser.username}: "${censoredContent.substring(0, 50)}..."`);
+                    } catch (err) {
+                        console.error('[Forum] Create post error:', err);
+                        sendToClient(ws, { 
+                            type: ForumPacketType.FORUM_ERROR, 
+                            message: 'Failed to create post' 
+                        });
+                    }
+                    break;
+                }
+                
+                case ForumPacketType.FORUM_NEW_REPLY: {
+                    if (!ws.forumUser) {
+                        sendToClient(ws, { 
+                            type: ForumPacketType.FORUM_ERROR, 
+                            message: 'Not authenticated' 
+                        });
+                        break;
+                    }
+                    
+                    const replyContent = (data.content || '').trim();
+                    if (!replyContent || !data.postId) {
+                        sendToClient(ws, { 
+                            type: ForumPacketType.FORUM_ERROR, 
+                            message: 'Content and postId required' 
+                        });
+                        break;
+                    }
+                    
+                    if (replyContent.length > 1000) {
+                        sendToClient(ws, { 
+                            type: ForumPacketType.FORUM_ERROR, 
+                            message: 'Reply too long (max 1000)' 
+                        });
+                        break;
+                    }
+                    
+                    try {
+                        const censoredReply = censorText(replyContent);
+                        const isStaff = isStaffUser(ws.forumUser.username);
+                        
+                        const reply = {
+                            author: ws.forumUser.username,
+                            authorId: ws.forumUser.odilId,
+                            content: censoredReply,
+                            isStaffReply: isStaff,
+                            createdAt: new Date()
+                        };
+                        
+                        const updatedPost = await ForumPost.findByIdAndUpdate(
+                            data.postId,
+                            { $push: { replies: reply } },
+                            { new: true }
+                        ).lean();
+                        
+                        if (updatedPost) {
+                            broadcastToForum({
+                                type: ForumPacketType.FORUM_POST_UPDATED,
+                                post: updatedPost
+                            });
+                            console.log(`[Forum] Reply by ${ws.forumUser.username} on post ${data.postId}`);
+                        }
+                    } catch (err) {
+                        console.error('[Forum] Reply error:', err);
+                        sendToClient(ws, { 
+                            type: ForumPacketType.FORUM_ERROR, 
+                            message: 'Failed to add reply' 
+                        });
+                    }
+                    break;
+                }
+                
+                case ForumPacketType.FORUM_LIKE_POST: {
+                    if (!ws.forumUser || !data.postId) break;
+                    
+                    try {
+                        const post = await ForumPost.findById(data.postId);
+                        if (!post) break;
+                        
+                        const odilId = ws.forumUser.odilId;
+                        const likeIndex = post.likes.indexOf(odilId);
+                        
+                        if (likeIndex === -1) {
+                            post.likes.push(odilId);
+                        } else {
+                            post.likes.splice(likeIndex, 1);
+                        }
+                        
+                        await post.save();
+                        
+                        broadcastToForum({
+                            type: ForumPacketType.FORUM_POST_UPDATED,
+                            post: post.toObject()
+                        });
+                    } catch (err) {
+                        console.error('[Forum] Like error:', err);
+                    }
+                    break;
+                }
+                
+                case ForumPacketType.FORUM_DELETE_POST: {
+                    if (!ws.forumUser || !data.postId) break;
+                    
+                    try {
+                        const post = await ForumPost.findById(data.postId);
+                        if (!post) break;
+                        
+                        const isStaff = isStaffUser(ws.forumUser.username);
+                        const isAuthor = post.authorId === ws.forumUser.odilId;
+                        
+                        if (!isStaff && !isAuthor) {
+                            sendToClient(ws, { 
+                                type: ForumPacketType.FORUM_ERROR, 
+                                message: 'Not authorized to delete' 
+                            });
+                            break;
+                        }
+                        
+                        await ForumPost.findByIdAndDelete(data.postId);
+                        
+                        broadcastToForum({
+                            type: ForumPacketType.FORUM_POST_DELETED,
+                            postId: data.postId
+                        });
+                        
+                        console.log(`[Forum] Post ${data.postId} deleted by ${ws.forumUser.username}`);
+                    } catch (err) {
+                        console.error('[Forum] Delete error:', err);
+                    }
+                    break;
+                }
+                
+                case ForumPacketType.FORUM_PIN_POST: {
+                    if (!ws.forumUser || !data.postId) break;
+                    
+                    const isStaff = isStaffUser(ws.forumUser.username);
+                    if (!isStaff) {
+                        sendToClient(ws, { 
+                            type: ForumPacketType.FORUM_ERROR, 
+                            message: 'Staff only' 
+                        });
+                        break;
+                    }
+                    
+                    try {
+                        const post = await ForumPost.findById(data.postId);
+                        if (!post) break;
+                        
+                        post.isPinned = !post.isPinned;
+                        await post.save();
+                        
+                        broadcastToForum({
+                            type: ForumPacketType.FORUM_POST_UPDATED,
+                            post: post.toObject()
+                        });
+                        
+                        console.log(`[Forum] Post ${data.postId} ${post.isPinned ? 'pinned' : 'unpinned'} by ${ws.forumUser.username}`);
+                    } catch (err) {
+                        console.error('[Forum] Pin error:', err);
+                    }
+                    break;
+                }
+            }
+        } catch (err) {
+            console.error('[Forum] Handle message error:', err);
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // MESSAGE LISTENER
+    // ═══════════════════════════════════════════════════════════════
 
     ws.on('message', (message) => {
         try {
@@ -463,10 +969,15 @@ wss.on('connection', (ws, req) => {
     });
 
     ws.on('close', (code, reason) => {
-        console.log(`[WS] Closed: ${clientUsername} (#${clientOdilId}), code: ${code}`);
+        console.log(`[WS] Closed: ${clientUsername || 'unknown'} (#${clientOdilId || '?'}), code: ${code}`);
 
         if (clientGameId && clientOdilId && isConnected) {
             removePlayerFromGame(clientGameId, clientOdilId);
+        }
+        
+        if (ws.isForumClient) {
+            forumClients.delete(ws);
+            console.log(`[Forum] Client removed on close. Total: ${forumClients.size}`);
         }
         
         isConnected = false;
@@ -478,7 +989,7 @@ wss.on('connection', (ws, req) => {
     });
 });
 
-// Пинг клиентов
+// Ping clients
 const pingInterval = setInterval(() => {
     wss.clients.forEach((ws) => {
         if (ws.isAlive === false) {
@@ -494,7 +1005,7 @@ wss.on('close', () => {
     clearInterval(pingInterval);
 });
 
-// Таймауты
+// Timeouts
 setInterval(() => {
     const now = Date.now();
     
@@ -598,10 +1109,37 @@ const launchTokenSchema = new mongoose.Schema({
 const LaunchToken = mongoose.model('LaunchToken', launchTokenSchema);
 
 // ═══════════════════════════════════════════════════════════════
+// FORUM SCHEMA
+// ═══════════════════════════════════════════════════════════════
+
+const forumPostSchema = new mongoose.Schema({
+    author: { type: String, required: true },
+    authorId: { type: Number, required: true },
+    content: { type: String, required: true, maxlength: 2000 },
+    category: { 
+        type: String, 
+        default: 'general',
+        enum: ['general', 'games', 'bugs', 'suggestions', 'announcements']
+    },
+    isStaffPost: { type: Boolean, default: false },
+    isPinned: { type: Boolean, default: false },
+    likes: [{ type: Number }],
+    replies: [{
+        author: String,
+        authorId: Number,
+        content: String,
+        isStaffReply: Boolean,
+        createdAt: { type: Date, default: Date.now }
+    }],
+    createdAt: { type: Date, default: Date.now }
+});
+
+const ForumPost = mongoose.model('ForumPost', forumPostSchema);
+
+// ═══════════════════════════════════════════════════════════════
 // GAME BUILD DATA
 // ═══════════════════════════════════════════════════════════════
 
-// Baseplate - простая платформа
 const baseplateBuildData = {
     objects: [
         {
@@ -626,10 +1164,8 @@ const baseplateBuildData = {
     version: 1
 };
 
-// Obby - полоса препятствий
 const obbyBuildData = {
     objects: [
-        // Стартовая платформа
         {
             type: 'cube',
             position: { x: 0, y: 0, z: 0 },
@@ -637,11 +1173,7 @@ const obbyBuildData = {
             color: { r: 0.2, g: 0.6, b: 0.2 },
             isStatic: true
         },
-        {
-            type: 'spawn',
-            position: { x: 0, y: 2, z: 0 }
-        },
-        // Платформа 1
+        { type: 'spawn', position: { x: 0, y: 2, z: 0 } },
         {
             type: 'cube',
             position: { x: 0, y: 0, z: 12 },
@@ -649,7 +1181,6 @@ const obbyBuildData = {
             color: { r: 0.9, g: 0.3, b: 0.3 },
             isStatic: true
         },
-        // Платформа 2 (выше)
         {
             type: 'cube',
             position: { x: 0, y: 2, z: 20 },
@@ -657,7 +1188,6 @@ const obbyBuildData = {
             color: { r: 0.9, g: 0.6, b: 0.2 },
             isStatic: true
         },
-        // Платформа 3
         {
             type: 'cube',
             position: { x: 6, y: 4, z: 20 },
@@ -665,7 +1195,6 @@ const obbyBuildData = {
             color: { r: 0.9, g: 0.9, b: 0.2 },
             isStatic: true
         },
-        // Платформа 4
         {
             type: 'cube',
             position: { x: 12, y: 6, z: 20 },
@@ -673,7 +1202,6 @@ const obbyBuildData = {
             color: { r: 0.2, g: 0.9, b: 0.2 },
             isStatic: true
         },
-        // Платформа 5
         {
             type: 'cube',
             position: { x: 12, y: 8, z: 12 },
@@ -681,7 +1209,6 @@ const obbyBuildData = {
             color: { r: 0.2, g: 0.7, b: 0.9 },
             isStatic: true
         },
-        // Платформа 6
         {
             type: 'cube',
             position: { x: 12, y: 10, z: 4 },
@@ -689,7 +1216,6 @@ const obbyBuildData = {
             color: { r: 0.5, g: 0.2, b: 0.9 },
             isStatic: true
         },
-        // Финишная платформа
         {
             type: 'cube',
             position: { x: 12, y: 12, z: -4 },
@@ -697,7 +1223,6 @@ const obbyBuildData = {
             color: { r: 1.0, g: 0.84, b: 0.0 },
             isStatic: true
         },
-        // Трамплин
         {
             type: 'cube',
             position: { x: 6, y: 0.2, z: 6 },
@@ -717,14 +1242,8 @@ const obbyBuildData = {
     version: 1
 };
 
-// Hotel - красивое закрытое помещение с освещением
 const hotelBuildData = {
     objects: [
-        // ═══════════════════════════════════════════════════
-        // ПОЛ И ПОТОЛОК
-        // ═══════════════════════════════════════════════════
-        
-        // Пол холла
         {
             type: 'cube',
             position: { x: 0, y: 0, z: 0 },
@@ -732,7 +1251,6 @@ const hotelBuildData = {
             color: { r: 0.15, g: 0.1, b: 0.08 },
             isStatic: true
         },
-        // Ковёр в центре
         {
             type: 'cube',
             position: { x: 0, y: 0.26, z: 0 },
@@ -740,7 +1258,6 @@ const hotelBuildData = {
             color: { r: 0.6, g: 0.1, b: 0.15 },
             isStatic: true
         },
-        // Потолок
         {
             type: 'cube',
             position: { x: 0, y: 10, z: 0 },
@@ -748,12 +1265,6 @@ const hotelBuildData = {
             color: { r: 0.95, g: 0.93, b: 0.88 },
             isStatic: true
         },
-
-        // ═══════════════════════════════════════════════════
-        // СТЕНЫ
-        // ═══════════════════════════════════════════════════
-
-        // Стена левая
         {
             type: 'cube',
             position: { x: -15, y: 5, z: 0 },
@@ -761,7 +1272,6 @@ const hotelBuildData = {
             color: { r: 0.85, g: 0.8, b: 0.7 },
             isStatic: true
         },
-        // Стена правая
         {
             type: 'cube',
             position: { x: 15, y: 5, z: 0 },
@@ -769,7 +1279,6 @@ const hotelBuildData = {
             color: { r: 0.85, g: 0.8, b: 0.7 },
             isStatic: true
         },
-        // Стена задняя
         {
             type: 'cube',
             position: { x: 0, y: 5, z: -20 },
@@ -777,7 +1286,6 @@ const hotelBuildData = {
             color: { r: 0.85, g: 0.8, b: 0.7 },
             isStatic: true
         },
-        // Стена передняя (с проёмом для входа)
         {
             type: 'cube',
             position: { x: -10, y: 5, z: 20 },
@@ -799,12 +1307,20 @@ const hotelBuildData = {
             color: { r: 0.85, g: 0.8, b: 0.7 },
             isStatic: true
         },
-
-        // ═══════════════════════════════════════════════════
-        // МЕБЕЛЬ
-        // ═══════════════════════════════════════════════════
-
-        // Стойка ресепшн
+        {
+            type: 'cube',
+            position: { x: -2.5, y: 3, z: 19.8 },
+            scale: { x: 2.5, y: 6, z: 0.2 },
+            color: { r: 0.3, g: 0.2, b: 0.15 },
+            isStatic: true
+        },
+        {
+            type: 'cube',
+            position: { x: 2.5, y: 3, z: 19.8 },
+            scale: { x: 2.5, y: 6, z: 0.2 },
+            color: { r: 0.3, g: 0.2, b: 0.15 },
+            isStatic: true
+        },
         {
             type: 'cube',
             position: { x: 0, y: 1.5, z: -15 },
@@ -812,7 +1328,13 @@ const hotelBuildData = {
             color: { r: 0.3, g: 0.2, b: 0.15 },
             isStatic: true
         },
-        // Диван 1
+        {
+            type: 'cube',
+            position: { x: 0, y: 3.1, z: -15 },
+            scale: { x: 10.2, y: 0.2, z: 2.2 },
+            color: { r: 0.85, g: 0.85, b: 0.8 },
+            isStatic: true
+        },
         {
             type: 'cube',
             position: { x: -10, y: 0.8, z: 5 },
@@ -820,7 +1342,6 @@ const hotelBuildData = {
             color: { r: 0.2, g: 0.15, b: 0.4 },
             isStatic: true
         },
-        // Диван 2
         {
             type: 'cube',
             position: { x: 10, y: 0.8, z: 5 },
@@ -828,20 +1349,6 @@ const hotelBuildData = {
             color: { r: 0.2, g: 0.15, b: 0.4 },
             isStatic: true
         },
-        // Столик
-        {
-            type: 'cube',
-            position: { x: 0, y: 0.6, z: 5 },
-            scale: { x: 3, y: 1.2, z: 2 },
-            color: { r: 0.4, g: 0.25, b: 0.15 },
-            isStatic: true
-        },
-
-        // ═══════════════════════════════════════════════════
-        // КОЛОННЫ
-        // ═══════════════════════════════════════════════════
-
-        // Колонна 1
         {
             type: 'cube',
             position: { x: -10, y: 5, z: -8 },
@@ -849,7 +1356,6 @@ const hotelBuildData = {
             color: { r: 0.9, g: 0.85, b: 0.75 },
             isStatic: true
         },
-        // Колонна 2
         {
             type: 'cube',
             position: { x: 10, y: 5, z: -8 },
@@ -857,7 +1363,6 @@ const hotelBuildData = {
             color: { r: 0.9, g: 0.85, b: 0.75 },
             isStatic: true
         },
-        // Колонна 3
         {
             type: 'cube',
             position: { x: -10, y: 5, z: 12 },
@@ -865,7 +1370,6 @@ const hotelBuildData = {
             color: { r: 0.9, g: 0.85, b: 0.75 },
             isStatic: true
         },
-        // Колонна 4
         {
             type: 'cube',
             position: { x: 10, y: 5, z: 12 },
@@ -873,28 +1377,6 @@ const hotelBuildData = {
             color: { r: 0.9, g: 0.85, b: 0.75 },
             isStatic: true
         },
-
-        // ═══════════════════════════════════════════════════
-        // ЛЮСТРА (визуальная часть)
-        // ═══════════════════════════════════════════════════
-
-        // Основание люстры
-        {
-            type: 'cube',
-            position: { x: 0, y: 9.5, z: 0 },
-            scale: { x: 0.5, y: 0.5, z: 0.5 },
-            color: { r: 0.8, g: 0.7, b: 0.3 },
-            isStatic: true
-        },
-        // Цепь люстры
-        {
-            type: 'cube',
-            position: { x: 0, y: 9.0, z: 0 },
-            scale: { x: 0.15, y: 1.0, z: 0.15 },
-            color: { r: 0.7, g: 0.6, b: 0.2 },
-            isStatic: true
-        },
-        // Кольцо люстры
         {
             type: 'cube',
             position: { x: 0, y: 8.0, z: 0 },
@@ -902,133 +1384,26 @@ const hotelBuildData = {
             color: { r: 1.0, g: 0.9, b: 0.6 },
             isStatic: true
         },
-
-        // ═══════════════════════════════════════════════════
-        // ОСВЕЩЕНИЕ
-        // ═══════════════════════════════════════════════════
-
-        // Главная люстра - тёплый свет в центре
         {
             type: 'point_light',
             position: { x: 0, y: 7.5, z: 0 },
             color: { r: 1.0, g: 0.9, b: 0.7 },
-            intensity: 2.0,
-            radius: 25,
-            enabled: true
+            intensity: 2.5,
+            radius: 28
         },
-
-        // Дополнительные точки света на люстре
-        {
-            type: 'point_light',
-            position: { x: 1.5, y: 7.8, z: 0 },
-            color: { r: 1.0, g: 0.85, b: 0.6 },
-            intensity: 0.8,
-            radius: 12,
-            flickering: true,
-            flickerSpeed: 8,
-            flickerAmount: 0.05
-        },
-        {
-            type: 'point_light',
-            position: { x: -1.5, y: 7.8, z: 0 },
-            color: { r: 1.0, g: 0.85, b: 0.6 },
-            intensity: 0.8,
-            radius: 12,
-            flickering: true,
-            flickerSpeed: 9,
-            flickerAmount: 0.05
-        },
-        {
-            type: 'point_light',
-            position: { x: 0, y: 7.8, z: 1.5 },
-            color: { r: 1.0, g: 0.85, b: 0.6 },
-            intensity: 0.8,
-            radius: 12,
-            flickering: true,
-            flickerSpeed: 7,
-            flickerAmount: 0.05
-        },
-        {
-            type: 'point_light',
-            position: { x: 0, y: 7.8, z: -1.5 },
-            color: { r: 1.0, g: 0.85, b: 0.6 },
-            intensity: 0.8,
-            radius: 12,
-            flickering: true,
-            flickerSpeed: 10,
-            flickerAmount: 0.05
-        },
-
-        // Настенные светильники у колонн
-        {
-            type: 'point_light',
-            position: { x: -10, y: 6, z: -8 },
-            color: { r: 1.0, g: 0.8, b: 0.5 },
-            intensity: 0.6,
-            radius: 10
-        },
-        {
-            type: 'point_light',
-            position: { x: 10, y: 6, z: -8 },
-            color: { r: 1.0, g: 0.8, b: 0.5 },
-            intensity: 0.6,
-            radius: 10
-        },
-        {
-            type: 'point_light',
-            position: { x: -10, y: 6, z: 12 },
-            color: { r: 1.0, g: 0.8, b: 0.5 },
-            intensity: 0.6,
-            radius: 10
-        },
-        {
-            type: 'point_light',
-            position: { x: 10, y: 6, z: 12 },
-            color: { r: 1.0, g: 0.8, b: 0.5 },
-            intensity: 0.6,
-            radius: 10
-        },
-
-        // Подсветка ресепшн
-        {
-            type: 'spot_light',
-            position: { x: 0, y: 9, z: -15 },
-            direction: { x: 0, y: -1, z: 0 },
-            color: { r: 1.0, g: 0.95, b: 0.9 },
-            intensity: 1.2,
-            radius: 15,
-            innerAngle: 20,
-            outerAngle: 35
-        },
-
-        // Подсветка входа
-        {
-            type: 'point_light',
-            position: { x: 0, y: 6, z: 18 },
-            color: { r: 0.9, g: 0.95, b: 1.0 },
-            intensity: 0.8,
-            radius: 12
-        },
-
-        // ═══════════════════════════════════════════════════
-        // SPAWN
-        // ═══════════════════════════════════════════════════
-        
-        {
-            type: 'spawn',
-            position: { x: 0, y: 2, z: 15 }
-        }
+        { type: 'spawn', position: { x: 0, y: 1.5, z: 10 } }
     ],
     settings: {
         gravity: -20,
-        skyColor: { r: 0.1, g: 0.1, b: 0.15 },
-        ambientColor: { r: 0.15, g: 0.12, b: 0.1 },
+        timeOfDay: "night",
+        ambientColor: { r: 0.25, g: 0.22, b: 0.2 },
         ambientIntensity: 0.8,
         fogEnabled: false,
-        spawnPoint: { x: 0, y: 2, z: 15 }
+        spawnPoint: { x: 0, y: 1.5, z: 10 }
     },
     version: 1
 };
+
 // ═══════════════════════════════════════════════════════════════
 // MONGODB CONNECTION
 // ═══════════════════════════════════════════════════════════════
@@ -1041,7 +1416,6 @@ mongoose.connect(process.env.MONGODB_URI)
             await mongoose.connection.collection('users').dropIndex('email_1');
         } catch (e) {}
         
-        // Удаляем старые игры и создаём новые
         await Game.deleteMany({});
         console.log('Cleared old games');
         
@@ -1088,7 +1462,7 @@ mongoose.connect(process.env.MONGODB_URI)
         ];
         
         await Game.insertMany(games);
-        console.log(`Created ${games.length} games: Baseplate, Obby, Hotel`);
+        console.log(`Created ${games.length} games`);
     })
     .catch(err => console.error('MongoDB error:', err));
 
@@ -1187,6 +1561,18 @@ app.get('/user/:id', (req, res) => {
 });
 
 // ═══════════════════════════════════════════════════════════════
+// TUFORUMS PAGE
+// ═══════════════════════════════════════════════════════════════
+
+app.get('/TuForums', auth, (req, res) => {
+    res.sendFile(path.join(__dirname, 'pages', 'forums.html'));
+});
+
+app.get('/TuForums/', auth, (req, res) => {
+    res.sendFile(path.join(__dirname, 'pages', 'forums.html'));
+});
+
+// ═══════════════════════════════════════════════════════════════
 // API - USER
 // ═══════════════════════════════════════════════════════════════
 
@@ -1232,7 +1618,6 @@ app.get('/api/user/:id', async (req, res) => {
     }
 });
 
-// GET /api/version
 app.get('/api/version', (req, res) => {
     res.json({
         version: "0.3",
@@ -1253,15 +1638,15 @@ app.post('/api/register', async (req, res) => {
             return res.status(400).json({ success: false, message: 'All fields required' });
         }
 
+        const validation = validateUsername(username);
+        if (!validation.valid) {
+            return res.status(400).json({ 
+                success: false, 
+                message: validation.error 
+            });
+        }
+
         const cleanUsername = username.toLowerCase().trim();
-
-        if (cleanUsername.length < 3 || cleanUsername.length > 20) {
-            return res.status(400).json({ success: false, message: 'Username must be 3-20 characters' });
-        }
-
-        if (!/^[a-z0-9_]+$/.test(cleanUsername)) {
-            return res.status(400).json({ success: false, message: 'Username can only contain letters, numbers and underscore' });
-        }
 
         if (password.length < 6) {
             return res.status(400).json({ success: false, message: 'Password must be at least 6 characters' });
@@ -1289,10 +1674,12 @@ app.post('/api/register', async (req, res) => {
             sameSite: 'strict' 
         });
         
+        console.log(`[Register] New user: ${cleanUsername} (#${odilId})`);
+        
         res.json({ success: true, odilId });
 
     } catch (err) {
-        console.error(err);
+        console.error('[Register] Error:', err);
         res.status(500).json({ success: false, message: 'Server error' });
     }
 });
@@ -1330,7 +1717,7 @@ app.post('/api/login', async (req, res) => {
         res.json({ success: true });
 
     } catch (err) {
-        console.error(err);
+        console.error('[Login] Error:', err);
         res.status(500).json({ success: false, message: 'Server error' });
     }
 });
@@ -1409,7 +1796,6 @@ app.get('/api/game/:id/servers', async (req, res) => {
     }
 });
 
-
 // ═══════════════════════════════════════════════════════════════
 // API - GAME LAUNCH
 // ═══════════════════════════════════════════════════════════════
@@ -1417,23 +1803,20 @@ app.get('/api/game/:id/servers', async (req, res) => {
 app.post('/api/game/launch', authAPI, async (req, res) => {
     try {
         const { gameId } = req.body;
-        const user = req.user; // <-- из authAPI middleware
+        const user = req.user;
         
         if (!gameId) {
             return res.json({ success: false, message: 'Game ID required' });
         }
         
-        // Получаем данные игры
         const game = await Game.findOne({ id: gameId });
         
         if (!game) {
             return res.json({ success: false, message: 'Game not found' });
         }
         
-        // Создаём токен сессии
         const token = crypto.randomBytes(32).toString('hex');
         
-        // Сохраняем токен в БД
         await LaunchToken.create({
             token: token,
             odilId: user.odilId,
@@ -1441,7 +1824,6 @@ app.post('/api/game/launch', authAPI, async (req, res) => {
             gameId: gameId
         });
         
-        // Увеличиваем счётчик визитов
         await Game.findOneAndUpdate(
             { id: gameId },
             { $inc: { visits: 1 } }
@@ -1474,19 +1856,15 @@ app.get('/api/game/validate/:token', async (req, res) => {
         
         if (!token) {
             return res.json({ success: false, message: 'Token required' });
-        }
+                }
         
-        // Проверяем токен
         const session = await LaunchToken.findOne({ token: token });
         
         if (!session) {
             return res.json({ success: false, message: 'Invalid or expired token' });
         }
         
-        // Получаем данные игры
         const game = await Game.findOne({ id: session.gameId });
-        
-        // Получаем данные пользователя
         const user = await User.findOne({ odilId: session.odilId });
         
         if (!user) {
@@ -1495,7 +1873,6 @@ app.get('/api/game/validate/:token', async (req, res) => {
         
         console.log(`[Validate] ${user.username} (#${user.odilId}) -> ${session.gameId}`);
         
-        // Удаляем использованный токен
         await LaunchToken.deleteOne({ token: token });
         
         res.json({
@@ -1519,14 +1896,223 @@ app.get('/api/game/validate/:token', async (req, res) => {
 });
 
 // ═══════════════════════════════════════════════════════════════
-// API - ADMIN (только для разработки)
+// API - FORUM (HTTP FALLBACK)
+// ═══════════════════════════════════════════════════════════════
+
+app.get('/api/forum/posts', authAPI, async (req, res) => {
+    try {
+        const { category } = req.query;
+        const filter = {};
+        
+        if (category && category !== 'all') {
+            filter.category = category;
+        }
+        
+        const posts = await ForumPost.find(filter)
+            .sort({ isPinned: -1, createdAt: -1 })
+            .limit(50)
+            .lean();
+        
+        res.json({ success: true, posts });
+    } catch (err) {
+        console.error('[Forum API] Get posts error:', err);
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+});
+
+app.post('/api/forum/posts', authAPI, async (req, res) => {
+    try {
+        const { content, category, isStaffPost, isPinned } = req.body;
+        
+        if (!content || content.trim().length === 0) {
+            return res.status(400).json({ success: false, message: 'Content required' });
+        }
+        
+        if (content.length > 2000) {
+            return res.status(400).json({ success: false, message: 'Content too long (max 2000)' });
+        }
+        
+        const isStaff = isStaffUser(req.user.username);
+        const censoredContent = censorText(content.trim());
+        
+        const post = new ForumPost({
+            author: req.user.username,
+            authorId: req.user.odilId,
+            content: censoredContent,
+            category: category || 'general',
+            isStaffPost: isStaff && isStaffPost === true,
+            isPinned: isStaff && isPinned === true
+        });
+        
+        await post.save();
+        
+        // Broadcast via WebSocket
+        broadcastToForum({
+            type: ForumPacketType.FORUM_POST_CREATED,
+            post: post.toObject()
+        });
+        
+        console.log(`[Forum API] New post by ${req.user.username}`);
+        
+        res.json({ success: true, post: post.toObject() });
+    } catch (err) {
+        console.error('[Forum API] Create post error:', err);
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+});
+
+app.post('/api/forum/posts/:postId/reply', authAPI, async (req, res) => {
+    try {
+        const { postId } = req.params;
+        const { content } = req.body;
+        
+        if (!content || content.trim().length === 0) {
+            return res.status(400).json({ success: false, message: 'Content required' });
+        }
+        
+        if (content.length > 1000) {
+            return res.status(400).json({ success: false, message: 'Reply too long (max 1000)' });
+        }
+        
+        const censoredContent = censorText(content.trim());
+        const isStaff = isStaffUser(req.user.username);
+        
+        const reply = {
+            author: req.user.username,
+            authorId: req.user.odilId,
+            content: censoredContent,
+            isStaffReply: isStaff,
+            createdAt: new Date()
+        };
+        
+        const updatedPost = await ForumPost.findByIdAndUpdate(
+            postId,
+            { $push: { replies: reply } },
+            { new: true }
+        ).lean();
+        
+        if (!updatedPost) {
+            return res.status(404).json({ success: false, message: 'Post not found' });
+        }
+        
+        // Broadcast via WebSocket
+        broadcastToForum({
+            type: ForumPacketType.FORUM_POST_UPDATED,
+            post: updatedPost
+        });
+        
+        res.json({ success: true, post: updatedPost });
+    } catch (err) {
+        console.error('[Forum API] Reply error:', err);
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+});
+
+app.post('/api/forum/posts/:postId/like', authAPI, async (req, res) => {
+    try {
+        const { postId } = req.params;
+        
+        const post = await ForumPost.findById(postId);
+        if (!post) {
+            return res.status(404).json({ success: false, message: 'Post not found' });
+        }
+        
+        const odilId = req.user.odilId;
+        const likeIndex = post.likes.indexOf(odilId);
+        
+        if (likeIndex === -1) {
+            post.likes.push(odilId);
+        } else {
+            post.likes.splice(likeIndex, 1);
+        }
+        
+        await post.save();
+        
+        // Broadcast via WebSocket
+        broadcastToForum({
+            type: ForumPacketType.FORUM_POST_UPDATED,
+            post: post.toObject()
+        });
+        
+        res.json({ success: true, liked: likeIndex === -1, likes: post.likes.length });
+    } catch (err) {
+        console.error('[Forum API] Like error:', err);
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+});
+
+app.delete('/api/forum/posts/:postId', authAPI, async (req, res) => {
+    try {
+        const { postId } = req.params;
+        
+        const post = await ForumPost.findById(postId);
+        if (!post) {
+            return res.status(404).json({ success: false, message: 'Post not found' });
+        }
+        
+        const isStaff = isStaffUser(req.user.username);
+        const isAuthor = post.authorId === req.user.odilId;
+        
+        if (!isStaff && !isAuthor) {
+            return res.status(403).json({ success: false, message: 'Not authorized' });
+        }
+        
+        await ForumPost.findByIdAndDelete(postId);
+        
+        // Broadcast via WebSocket
+        broadcastToForum({
+            type: ForumPacketType.FORUM_POST_DELETED,
+            postId: postId
+        });
+        
+        console.log(`[Forum API] Post ${postId} deleted by ${req.user.username}`);
+        
+        res.json({ success: true });
+    } catch (err) {
+        console.error('[Forum API] Delete error:', err);
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+});
+
+app.post('/api/forum/posts/:postId/pin', authAPI, async (req, res) => {
+    try {
+        const { postId } = req.params;
+        
+        if (!isStaffUser(req.user.username)) {
+            return res.status(403).json({ success: false, message: 'Staff only' });
+        }
+        
+        const post = await ForumPost.findById(postId);
+        if (!post) {
+            return res.status(404).json({ success: false, message: 'Post not found' });
+        }
+        
+        post.isPinned = !post.isPinned;
+        await post.save();
+        
+        // Broadcast via WebSocket
+        broadcastToForum({
+            type: ForumPacketType.FORUM_POST_UPDATED,
+            post: post.toObject()
+        });
+        
+        console.log(`[Forum API] Post ${postId} ${post.isPinned ? 'pinned' : 'unpinned'} by ${req.user.username}`);
+        
+        res.json({ success: true, isPinned: post.isPinned });
+    } catch (err) {
+        console.error('[Forum API] Pin error:', err);
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+});
+
+// ═══════════════════════════════════════════════════════════════
+// API - ADMIN
 // ═══════════════════════════════════════════════════════════════
 
 app.post('/api/admin/delete-user', async (req, res) => {
     try {
         const { username, adminKey } = req.body;
         
-        // Простая защита (замени на свой ключ)
         if (adminKey !== 'ASFLSDHJKL@#$YH%(*DSHGJDSH$@#(*%YKSFDJHGJKSDH#@($DHSGKjds') {
             return res.status(403).json({ success: false, message: 'Forbidden' });
         }
@@ -1576,4 +2162,5 @@ const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
     console.log(`WebSocket path: /ws`);
+    console.log(`TuForums: /TuForums`);
 });

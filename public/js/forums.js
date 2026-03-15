@@ -1,5 +1,5 @@
 // ============================================
-// TuForums Client - Clean Version
+// TuForums Client - Fixed Version
 // ============================================
 
 (function() {
@@ -12,14 +12,24 @@
     let currentPostId = null;
 
     // ============================================
+    // DOM ELEMENTS
+    // ============================================
+    
+    const $ = (id) => document.getElementById(id);
+    
+    // ============================================
     // INIT
     // ============================================
     
     async function init() {
+        console.log('[Forum] Initializing...');
+        
         await loadUser();
         await loadStats();
         await loadRecentActivity();
         setupEventListeners();
+        
+        console.log('[Forum] Ready');
     }
 
     async function loadUser() {
@@ -31,9 +41,10 @@
                 document.querySelectorAll('.username').forEach(el => {
                     el.textContent = data.user.username;
                 });
+                console.log('[Forum] User loaded:', data.user.username);
             }
         } catch (err) {
-            console.error('Load user error:', err);
+            console.error('[Forum] Load user error:', err);
         }
     }
 
@@ -51,26 +62,38 @@
             const data = await res.json();
             
             if (data.success) {
-                document.getElementById('total-posts').textContent = formatNumber(data.total.posts);
-                document.getElementById('total-replies').textContent = formatNumber(data.total.replies);
+                // Total stats
+                const totalPosts = $('stat-total-posts');
+                const totalReplies = $('stat-total-replies');
                 
-                const cats = data.categories;
+                if (totalPosts) totalPosts.textContent = formatNumber(data.total.posts);
+                if (totalReplies) totalReplies.textContent = formatNumber(data.total.replies);
                 
-                if (cats.updates) {
-                    document.getElementById('updates-threads').textContent = formatNumber(cats.updates.threads);
-                    document.getElementById('updates-posts').textContent = formatNumber(cats.updates.posts);
-                }
-                if (cats.general) {
-                    document.getElementById('general-threads').textContent = formatNumber(cats.general.threads);
-                    document.getElementById('general-posts').textContent = formatNumber(cats.general.posts);
-                }
-                if (cats.offtopic) {
-                    document.getElementById('offtopic-threads').textContent = formatNumber(cats.offtopic.threads);
-                    document.getElementById('offtopic-posts').textContent = formatNumber(cats.offtopic.posts);
-                }
+                // Category stats
+                const cats = data.categories || {};
+                
+                // Updates
+                const updatesThreads = $('stat-updates-threads');
+                const updatesPosts = $('stat-updates-posts');
+                if (updatesThreads) updatesThreads.textContent = formatNumber(cats.updates?.threads || 0);
+                if (updatesPosts) updatesPosts.textContent = formatNumber(cats.updates?.posts || 0);
+                
+                // General
+                const generalThreads = $('stat-general-threads');
+                const generalPosts = $('stat-general-posts');
+                if (generalThreads) generalThreads.textContent = formatNumber(cats.general?.threads || 0);
+                if (generalPosts) generalPosts.textContent = formatNumber(cats.general?.posts || 0);
+                
+                // Off Topic
+                const offtopicThreads = $('stat-offtopic-threads');
+                const offtopicPosts = $('stat-offtopic-posts');
+                if (offtopicThreads) offtopicThreads.textContent = formatNumber(cats.offtopic?.threads || 0);
+                if (offtopicPosts) offtopicPosts.textContent = formatNumber(cats.offtopic?.posts || 0);
+                
+                console.log('[Forum] Stats loaded');
             }
         } catch (err) {
-            console.error('Load stats error:', err);
+            console.error('[Forum] Load stats error:', err);
         }
     }
 
@@ -79,18 +102,22 @@
     // ============================================
 
     async function loadRecentActivity() {
-        const container = document.getElementById('recent-list');
+        const container = $('recent-activity-list');
+        if (!container) {
+            console.error('[Forum] recent-activity-list not found');
+            return;
+        }
         
         try {
             const res = await fetch('/api/forum/recent');
             const data = await res.json();
             
-            if (data.success && data.activity.length > 0) {
+            if (data.success && data.activity && data.activity.length > 0) {
                 container.innerHTML = data.activity.map(item => `
                     <div class="recent-item" onclick="openThread('${item.isReply ? item.originalPostId : item._id}')">
                         <div class="recent-avatar">${getInitials(item.author)}</div>
                         <div class="recent-content">
-                            <div class="recent-title">${escapeHtml(item.content.substring(0, 60))}${item.content.length > 60 ? '...' : ''}</div>
+                            <div class="recent-title">${escapeHtml(truncate(item.content, 60))}</div>
                             <div class="recent-meta">
                                 <span class="recent-author">${escapeHtml(item.author)}</span>
                                 <span>•</span>
@@ -99,10 +126,12 @@
                         </div>
                     </div>
                 `).join('');
+                console.log('[Forum] Recent activity loaded:', data.activity.length);
             } else {
                 container.innerHTML = '<div class="recent-empty">No recent activity</div>';
             }
         } catch (err) {
+            console.error('[Forum] Load recent error:', err);
             container.innerHTML = '<div class="recent-empty">Failed to load</div>';
         }
     }
@@ -111,7 +140,7 @@
     // CATEGORY MODAL
     // ============================================
 
-    function openCategory(category) {
+    window.openCategory = function(category) {
         currentCategory = category;
         
         const titles = {
@@ -120,34 +149,42 @@
             offtopic: 'Off Topic'
         };
         
-        document.getElementById('category-modal-title').textContent = titles[category] || category;
-        document.getElementById('category-modal').classList.add('active');
+        const titleEl = $('modal-category-title');
+        if (titleEl) titleEl.textContent = titles[category] || category;
+        
+        const modal = $('category-modal');
+        if (modal) modal.classList.add('active');
         
         // Hide post form for updates (staff only)
-        const postForm = document.getElementById('new-post-form');
-        if (category === 'updates' && !isStaff(currentUser?.username)) {
-            postForm.style.display = 'none';
-        } else {
-            postForm.style.display = 'block';
+        const postForm = $('form-new-post');
+        if (postForm) {
+            if (category === 'updates' && !isStaff(currentUser?.username)) {
+                postForm.style.display = 'none';
+            } else {
+                postForm.style.display = 'block';
+            }
         }
         
         loadPosts(category);
-    }
+    };
 
     window.closeCategoryModal = function() {
-        document.getElementById('category-modal').classList.remove('active');
+        const modal = $('category-modal');
+        if (modal) modal.classList.remove('active');
         currentCategory = null;
     };
 
     async function loadPosts(category) {
-        const container = document.getElementById('posts-list');
+        const container = $('category-posts-list');
+        if (!container) return;
+        
         container.innerHTML = '<div class="loading-placeholder"><div class="spinner"></div></div>';
         
         try {
             const res = await fetch(`/api/forum/posts?category=${category}`);
             const data = await res.json();
             
-            if (data.success && data.posts.length > 0) {
+            if (data.success && data.posts && data.posts.length > 0) {
                 container.innerHTML = data.posts.map(post => `
                     <div class="post-item ${post.isPinned ? 'pinned' : ''} ${post.isStaffPost ? 'staff-post' : ''}" 
                          onclick="openThread('${post._id}')">
@@ -177,6 +214,7 @@
                 `;
             }
         } catch (err) {
+            console.error('[Forum] Load posts error:', err);
             container.innerHTML = '<div class="posts-empty">Failed to load posts</div>';
         }
     }
@@ -189,39 +227,49 @@
         currentPostId = postId;
         
         // Close category modal, open thread modal
-        document.getElementById('category-modal').classList.remove('active');
-        document.getElementById('thread-modal').classList.add('active');
+        const catModal = $('category-modal');
+        const threadModal = $('thread-modal');
         
-        const container = document.getElementById('thread-content');
+        if (catModal) catModal.classList.remove('active');
+        if (threadModal) threadModal.classList.add('active');
+        
+        const container = $('thread-view-content');
+        if (!container) return;
+        
         container.innerHTML = '<div class="loading-placeholder"><div class="spinner"></div></div>';
         
         try {
             const res = await fetch(`/api/forum/posts/${postId}`);
             const data = await res.json();
             
-            if (data.success) {
+            if (data.success && data.post) {
                 renderThread(data.post);
             } else {
                 container.innerHTML = '<div class="posts-empty">Post not found</div>';
             }
         } catch (err) {
+            console.error('[Forum] Load thread error:', err);
             container.innerHTML = '<div class="posts-empty">Failed to load</div>';
         }
     };
 
     window.closeThreadModal = function() {
-        document.getElementById('thread-modal').classList.remove('active');
+        const threadModal = $('thread-modal');
+        if (threadModal) threadModal.classList.remove('active');
         
         // Re-open category modal if we had one
         if (currentCategory) {
-            document.getElementById('category-modal').classList.add('active');
+            const catModal = $('category-modal');
+            if (catModal) catModal.classList.add('active');
         }
         
         currentPostId = null;
     };
 
     function renderThread(post) {
-        const container = document.getElementById('thread-content');
+        const container = $('thread-view-content');
+        if (!container) return;
+        
         const canDelete = currentUser && (isStaff(currentUser.username) || post.authorId === currentUser.odilId);
         const canPin = currentUser && isStaff(currentUser.username);
         
@@ -265,19 +313,22 @@
             ${repliesHtml}
             
             <div class="reply-form">
-                <textarea id="reply-content" placeholder="Write a reply..." maxlength="1000" rows="3"></textarea>
+                <textarea id="input-reply-content" placeholder="Write a reply..." maxlength="1000" rows="3"></textarea>
                 <div class="reply-form-actions">
-                    <span class="char-counter"><span id="reply-char-count">0</span>/1000</span>
+                    <span class="char-counter"><span id="reply-char-counter">0</span>/1000</span>
                     <button class="btn btn-primary btn-sm" onclick="submitReply()">Reply</button>
                 </div>
             </div>
         `;
         
-        // Setup char counter
-        const replyInput = document.getElementById('reply-content');
-        replyInput.addEventListener('input', () => {
-            document.getElementById('reply-char-count').textContent = replyInput.value.length;
-        });
+        // Setup char counter for reply
+        const replyInput = $('input-reply-content');
+        if (replyInput) {
+            replyInput.addEventListener('input', () => {
+                const counter = $('reply-char-counter');
+                if (counter) counter.textContent = replyInput.value.length;
+            });
+        }
     }
 
     // ============================================
@@ -285,8 +336,14 @@
     // ============================================
 
     window.submitPost = async function() {
-        const content = document.getElementById('new-post-content').value.trim();
+        const input = $('input-post-content');
+        if (!input) return;
+        
+        const content = input.value.trim();
         if (!content) return;
+        
+        const btn = $('btn-submit-post');
+        if (btn) btn.disabled = true;
         
         try {
             const res = await fetch('/api/forum/posts', {
@@ -301,23 +358,31 @@
             const data = await res.json();
             
             if (data.success) {
-                document.getElementById('new-post-content').value = '';
-                document.getElementById('char-count').textContent = '0';
-                document.getElementById('submit-post').disabled = true;
+                input.value = '';
+                const counter = $('post-char-count');
+                if (counter) counter.textContent = '0';
+                
                 loadPosts(currentCategory);
                 loadStats();
+                loadRecentActivity();
                 toast('Posted!');
             } else {
-                toast(data.message, 'error');
+                toast(data.message || 'Failed to post', 'error');
             }
         } catch (err) {
+            console.error('[Forum] Submit post error:', err);
             toast('Failed to post', 'error');
         }
+        
+        if (btn) btn.disabled = false;
     };
 
     window.submitReply = async function() {
-        const content = document.getElementById('reply-content').value.trim();
-        if (!content || !currentPostId) return;
+        const input = $('input-reply-content');
+        if (!input || !currentPostId) return;
+        
+        const content = input.value.trim();
+        if (!content) return;
         
         try {
             const res = await fetch(`/api/forum/posts/${currentPostId}/reply`, {
@@ -331,11 +396,13 @@
             if (data.success) {
                 renderThread(data.post);
                 loadStats();
+                loadRecentActivity();
                 toast('Replied!');
             } else {
-                toast(data.message, 'error');
+                toast(data.message || 'Failed to reply', 'error');
             }
         } catch (err) {
+            console.error('[Forum] Submit reply error:', err);
             toast('Failed to reply', 'error');
         }
     };
@@ -359,9 +426,10 @@
                 loadRecentActivity();
                 toast('Deleted');
             } else {
-                toast(data.message, 'error');
+                toast(data.message || 'Failed to delete', 'error');
             }
         } catch (err) {
+            console.error('[Forum] Delete error:', err);
             toast('Failed to delete', 'error');
         }
     };
@@ -378,9 +446,10 @@
                 openThread(postId);
                 toast(data.isPinned ? 'Pinned' : 'Unpinned');
             } else {
-                toast(data.message, 'error');
+                toast(data.message || 'Failed', 'error');
             }
         } catch (err) {
+            console.error('[Forum] Pin error:', err);
             toast('Failed', 'error');
         }
     };
@@ -393,39 +462,58 @@
         // Category cards
         document.querySelectorAll('.category-card').forEach(card => {
             card.addEventListener('click', () => {
-                openCategory(card.dataset.category);
+                const category = card.dataset.category;
+                if (category) openCategory(category);
             });
         });
         
         // Post content input
-        const postContent = document.getElementById('new-post-content');
-        const submitBtn = document.getElementById('submit-post');
-        const charCount = document.getElementById('char-count');
+        const postInput = $('input-post-content');
+        const submitBtn = $('btn-submit-post');
+        const charCount = $('post-char-count');
         
-        postContent.addEventListener('input', () => {
-            const len = postContent.value.length;
-            charCount.textContent = len;
-            submitBtn.disabled = len === 0 || len > 2000;
-        });
-        
-        submitBtn.addEventListener('click', submitPost);
-        
-        // Ctrl+Enter to submit
-        postContent.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter' && e.ctrlKey && !submitBtn.disabled) {
-                submitPost();
-            }
-        });
+        if (postInput && submitBtn && charCount) {
+            postInput.addEventListener('input', () => {
+                const len = postInput.value.length;
+                charCount.textContent = len;
+                submitBtn.disabled = len === 0 || len > 2000;
+            });
+            
+            submitBtn.addEventListener('click', submitPost);
+            
+            // Ctrl+Enter to submit
+            postInput.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' && e.ctrlKey && !submitBtn.disabled) {
+                    e.preventDefault();
+                    submitPost();
+                }
+            });
+        }
         
         // Modal backdrops
         document.querySelectorAll('.modal-backdrop').forEach(backdrop => {
             backdrop.addEventListener('click', () => {
-                backdrop.closest('.modal').classList.remove('active');
+                const modal = backdrop.closest('.modal');
+                if (modal) modal.classList.remove('active');
+                currentCategory = null;
+                currentPostId = null;
             });
         });
         
         // Logout
-        document.getElementById('logout-btn')?.addEventListener('click', logout);
+        const logoutBtn = $('logout-btn');
+        if (logoutBtn) {
+            logoutBtn.addEventListener('click', () => {
+                if (typeof logout === 'function') {
+                    logout();
+                } else {
+                    fetch('/api/logout', { method: 'POST' })
+                        .then(() => location.href = '/');
+                }
+            });
+        }
+        
+        console.log('[Forum] Event listeners ready');
     }
 
     // ============================================
@@ -437,6 +525,12 @@
         const div = document.createElement('div');
         div.textContent = text;
         return div.innerHTML;
+    }
+
+    function truncate(text, len) {
+        if (!text) return '';
+        if (text.length <= len) return text;
+        return text.substring(0, len) + '...';
     }
 
     function formatTimeAgo(dateStr) {
@@ -453,6 +547,7 @@
     }
 
     function formatNumber(n) {
+        if (!n) return '0';
         if (n >= 1000000) return (n / 1000000).toFixed(1) + 'M';
         if (n >= 1000) return (n / 1000).toFixed(1) + 'K';
         return n.toString();
@@ -464,14 +559,18 @@
     }
 
     // ============================================
-    // INIT
+    // INIT ON DOM READY
     // ============================================
 
-    if (document.querySelector('.forums-page')) {
-        init();
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', () => {
+            if (document.querySelector('.forums-page')) {
+                init();
+            }
+        });
+    } else {
+        if (document.querySelector('.forums-page')) {
+            init();
+        }
     }
-
-    // Expose for onclick handlers
-    window.openCategory = openCategory;
-    window.openThread = openThread;
 })();

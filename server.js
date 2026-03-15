@@ -717,9 +717,13 @@ const obbyBuildData = {
     version: 1
 };
 
-// Hotel - красивое закрытое помещение
+// Hotel - красивое закрытое помещение с освещением
 const hotelBuildData = {
     objects: [
+        // ═══════════════════════════════════════════════════
+        // ПОЛ И ПОТОЛОК
+        // ═══════════════════════════════════════════════════
+        
         // Пол холла
         {
             type: 'cube',
@@ -744,6 +748,11 @@ const hotelBuildData = {
             color: { r: 0.95, g: 0.93, b: 0.88 },
             isStatic: true
         },
+
+        // ═══════════════════════════════════════════════════
+        // СТЕНЫ
+        // ═══════════════════════════════════════════════════
+
         // Стена левая
         {
             type: 'cube',
@@ -790,6 +799,11 @@ const hotelBuildData = {
             color: { r: 0.85, g: 0.8, b: 0.7 },
             isStatic: true
         },
+
+        // ═══════════════════════════════════════════════════
+        // МЕБЕЛЬ
+        // ═══════════════════════════════════════════════════
+
         // Стойка ресепшн
         {
             type: 'cube',
@@ -822,6 +836,11 @@ const hotelBuildData = {
             color: { r: 0.4, g: 0.25, b: 0.15 },
             isStatic: true
         },
+
+        // ═══════════════════════════════════════════════════
+        // КОЛОННЫ
+        // ═══════════════════════════════════════════════════
+
         // Колонна 1
         {
             type: 'cube',
@@ -854,15 +873,147 @@ const hotelBuildData = {
             color: { r: 0.9, g: 0.85, b: 0.75 },
             isStatic: true
         },
-        // Люстра (центр)
+
+        // ═══════════════════════════════════════════════════
+        // ЛЮСТРА (визуальная часть)
+        // ═══════════════════════════════════════════════════
+
+        // Основание люстры
         {
             type: 'cube',
-            position: { x: 0, y: 8, z: 0 },
+            position: { x: 0, y: 9.5, z: 0 },
+            scale: { x: 0.5, y: 0.5, z: 0.5 },
+            color: { r: 0.8, g: 0.7, b: 0.3 },
+            isStatic: true
+        },
+        // Цепь люстры
+        {
+            type: 'cube',
+            position: { x: 0, y: 9.0, z: 0 },
+            scale: { x: 0.15, y: 1.0, z: 0.15 },
+            color: { r: 0.7, g: 0.6, b: 0.2 },
+            isStatic: true
+        },
+        // Кольцо люстры
+        {
+            type: 'cube',
+            position: { x: 0, y: 8.0, z: 0 },
             scale: { x: 4, y: 0.3, z: 4 },
             color: { r: 1.0, g: 0.9, b: 0.6 },
             isStatic: true
         },
-        // Spawn
+
+        // ═══════════════════════════════════════════════════
+        // ОСВЕЩЕНИЕ
+        // ═══════════════════════════════════════════════════
+
+        // Главная люстра - тёплый свет в центре
+        {
+            type: 'point_light',
+            position: { x: 0, y: 7.5, z: 0 },
+            color: { r: 1.0, g: 0.9, b: 0.7 },
+            intensity: 2.0,
+            radius: 25,
+            enabled: true
+        },
+
+        // Дополнительные точки света на люстре
+        {
+            type: 'point_light',
+            position: { x: 1.5, y: 7.8, z: 0 },
+            color: { r: 1.0, g: 0.85, b: 0.6 },
+            intensity: 0.8,
+            radius: 12,
+            flickering: true,
+            flickerSpeed: 8,
+            flickerAmount: 0.05
+        },
+        {
+            type: 'point_light',
+            position: { x: -1.5, y: 7.8, z: 0 },
+            color: { r: 1.0, g: 0.85, b: 0.6 },
+            intensity: 0.8,
+            radius: 12,
+            flickering: true,
+            flickerSpeed: 9,
+            flickerAmount: 0.05
+        },
+        {
+            type: 'point_light',
+            position: { x: 0, y: 7.8, z: 1.5 },
+            color: { r: 1.0, g: 0.85, b: 0.6 },
+            intensity: 0.8,
+            radius: 12,
+            flickering: true,
+            flickerSpeed: 7,
+            flickerAmount: 0.05
+        },
+        {
+            type: 'point_light',
+            position: { x: 0, y: 7.8, z: -1.5 },
+            color: { r: 1.0, g: 0.85, b: 0.6 },
+            intensity: 0.8,
+            radius: 12,
+            flickering: true,
+            flickerSpeed: 10,
+            flickerAmount: 0.05
+        },
+
+        // Настенные светильники у колонн
+        {
+            type: 'point_light',
+            position: { x: -10, y: 6, z: -8 },
+            color: { r: 1.0, g: 0.8, b: 0.5 },
+            intensity: 0.6,
+            radius: 10
+        },
+        {
+            type: 'point_light',
+            position: { x: 10, y: 6, z: -8 },
+            color: { r: 1.0, g: 0.8, b: 0.5 },
+            intensity: 0.6,
+            radius: 10
+        },
+        {
+            type: 'point_light',
+            position: { x: -10, y: 6, z: 12 },
+            color: { r: 1.0, g: 0.8, b: 0.5 },
+            intensity: 0.6,
+            radius: 10
+        },
+        {
+            type: 'point_light',
+            position: { x: 10, y: 6, z: 12 },
+            color: { r: 1.0, g: 0.8, b: 0.5 },
+            intensity: 0.6,
+            radius: 10
+        },
+
+        // Подсветка ресепшн
+        {
+            type: 'spot_light',
+            position: { x: 0, y: 9, z: -15 },
+            direction: { x: 0, y: -1, z: 0 },
+            color: { r: 1.0, g: 0.95, b: 0.9 },
+            intensity: 1.2,
+            radius: 15,
+            innerAngle: 20,
+            outerAngle: 35
+        },
+
+        // Подсветка входа
+        {
+            type: 'point_light',
+            position: { x: 0, y: 6, z: 18 },
+            color: { r: 0.9, g: 0.95, b: 1.0 },
+            intensity: 0.8,
+            radius: 12
+        },
+
+        // ═══════════════════════════════════════════════════
+        // SPAWN
+        // ═══════════════════════════════════════════════════
+        
         {
             type: 'spawn',
             position: { x: 0, y: 2, z: 15 }
@@ -871,13 +1022,13 @@ const hotelBuildData = {
     settings: {
         gravity: -20,
         skyColor: { r: 0.1, g: 0.1, b: 0.15 },
-        ambientColor: { r: 0.6, g: 0.55, b: 0.5 },
+        ambientColor: { r: 0.15, g: 0.12, b: 0.1 },
+        ambientIntensity: 0.8,
         fogEnabled: false,
         spawnPoint: { x: 0, y: 2, z: 15 }
     },
     version: 1
 };
-
 // ═══════════════════════════════════════════════════════════════
 // MONGODB CONNECTION
 // ═══════════════════════════════════════════════════════════════
@@ -1084,9 +1235,9 @@ app.get('/api/user/:id', async (req, res) => {
 // GET /api/version
 app.get('/api/version', (req, res) => {
     res.json({
-        version: "0.2",
+        version: "0.3",
         downloadUrl: "https://tublox.onrender.com/download/TuClient.zip",
-        message: "Patch 0.2"
+        message: "Patch 0.3"
     });
 });
 

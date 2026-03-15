@@ -1081,6 +1081,15 @@ app.get('/api/user/:id', async (req, res) => {
     }
 });
 
+// GET /api/version
+app.get('/api/version', (req, res) => {
+    res.json({
+        version: "0.2",
+        downloadUrl: "https://tublox.onrender.com/download/TuClient.zip",
+        message: "Patch 0.2"
+    });
+});
+
 // ═══════════════════════════════════════════════════════════════
 // API - AUTH
 // ═══════════════════════════════════════════════════════════════
@@ -1249,88 +1258,94 @@ app.get('/api/game/:id/servers', async (req, res) => {
     }
 });
 
-// ═══════════════════════════════════════════════════════════════
-// API - GAME LAUNCH
-// ═══════════════════════════════════════════════════════════════
+// server.js или routes/game.js
 
-app.post('/api/game/launch', authAPI, async (req, res) => {
+app.post('/api/game/launch', requireAuth, async (req, res) => {
     try {
         const { gameId } = req.body;
+        const user = req.session.user;
         
-        const game = await Game.findOne({ id: gameId });
+        // Получаем данные игры
+        const game = await getGameById(gameId); // твоя функция
+        
         if (!game) {
-            return res.status(404).json({ success: false, message: 'Game not found' });
+            return res.json({ success: false, message: 'Game not found' });
         }
         
-        game.visits += 1;
-        await game.save();
+        // Создаём токен сессии
+        const token = generateLaunchToken(user, gameId);
         
-        const launchToken = crypto.randomBytes(32).toString('hex');
-        
-        await LaunchToken.create({
-            token: launchToken,
-            odilId: req.user.odilId,
-            username: req.user.username,
-            gameId: game.id
+        // Сохраняем токен для валидации
+        await saveLaunchToken(token, {
+            odilId: user.odilId,
+            username: user.username,
+            gameId: gameId,
+            createdAt: Date.now()
         });
         
-        console.log(`[Launch] ${req.user.username} (#${req.user.odilId}) launching ${gameId}`);
-        
-        const wsHost = process.env.RENDER_EXTERNAL_HOSTNAME || 
-                       process.env.WS_HOST || 
-                       'tublox.onrender.com';
-        
-        res.json({ 
-            success: true, 
-            token: launchToken,
-            wsHost: wsHost,
-            wsPort: 443,
-            gameId: game.id
+        res.json({
+            success: true,
+            token: token,
+            wsHost: process.env.WS_HOST || 'tublox.onrender.com',
+            wsPort: process.env.WS_PORT || 443,
+            gameId: gameId,
+            // ═══════════════════════════════════════════════════════════
+            // ДОБАВЛЯЕМ ДАННЫЕ ИГРЫ
+            // ═══════════════════════════════════════════════════════════
+            gameName: game.title || game.name || 'TuBlox World',
+            creatorName: game.creator || game.creatorName || '',
+            description: game.description || '',
+            maxPlayers: game.maxPlayers || 10,
+            thumbnail: game.thumbnail || ''
         });
-    } catch (err) {
-        console.error(err);
-        res.status(500).json({ success: false, message: 'Server error' });
+        
+    } catch (e) {
+        console.error('Launch error:', e);
+        res.json({ success: false, message: 'Server error' });
     }
 });
 
 app.get('/api/game/validate/:token', async (req, res) => {
     try {
-        const launchData = await LaunchToken.findOne({ token: req.params.token });
+        const { token } = req.params;
         
-        if (!launchData) {
-            return res.status(404).json({ success: false, message: 'Invalid or expired token' });
+        // Проверяем токен
+        const session = await getLaunchToken(token);
+        
+        if (!session) {
+            return res.json({ success: false, message: 'Invalid or expired token' });
         }
         
-        const game = await Game.findOne({ id: launchData.gameId });
+        // Получаем данные игры
+        const game = await getGameById(session.gameId);
         
-        await LaunchToken.deleteOne({ token: req.params.token });
+        // Получаем данные пользователя
+        const user = await getUserByOdilId(session.odilId);
         
-        const wsHost = process.env.RENDER_EXTERNAL_HOSTNAME || 
-                       process.env.WS_HOST || 
-                       'tublox.onrender.com';
-        
-        const response = {
+        res.json({
             success: true,
-            odilId: launchData.odilId,
-            username: launchData.username,
-            gameId: launchData.gameId,
-            wsHost: wsHost,
-            wsPort: 443
-        };
+            username: user.username,
+            odilId: user.odilId,
+            gameId: session.gameId,
+            // ═══════════════════════════════════════════════════════════
+            // ДАННЫЕ ИГРЫ
+            // ═══════════════════════════════════════════════════════════
+            gameName: game?.title || game?.name || 'TuBlox World',
+            creatorName: game?.creator || game?.creatorName || '',
+            description: game?.description || '',
+            maxPlayers: game?.maxPlayers || 10,
+            // WebSocket
+            wsHost: process.env.WS_HOST || 'tublox.onrender.com',
+            wsPort: parseInt(process.env.WS_PORT) || 443,
+            // Build data если есть
+            buildData: game?.buildData || null
+        });
         
-        if (game && game.buildData) {
-            response.buildData = game.buildData;
-        } else {
-            response.buildData = defaultWorldBuildData;
-        }
-        
-        res.json(response);
-    } catch (err) {
-        console.error('[Validate] Error:', err);
-        res.status(500).json({ success: false, message: 'Server error' });
+    } catch (e) {
+        console.error('Validate error:', e);
+        res.json({ success: false, message: 'Server error' });
     }
 });
-
 // ═══════════════════════════════════════════════════════════════
 // DOWNLOADS
 // ═══════════════════════════════════════════════════════════════

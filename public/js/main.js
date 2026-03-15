@@ -421,14 +421,41 @@ async function launchGame(gameId) {
             return;
         }
         
-        // Формируем данные для клиента (WebSocket connection)
+        // ═══════════════════════════════════════════════════════════
+        // ПОЛУЧАЕМ ДАННЫЕ ИГРЫ
+        // ═══════════════════════════════════════════════════════════
+        let gameName = data.gameName || 'TuBlox World';
+        let gameCreator = data.creatorName || '';
+        
+        // Если сервер не вернул название — получаем из API
+        if (gameName === 'TuBlox World' || !gameName) {
+            try {
+                const gameRes = await fetch(`/api/game/${gameId}`);
+                const gameData = await gameRes.json();
+                if (gameData.success && gameData.game) {
+                    gameName = gameData.game.title || gameName;
+                    gameCreator = gameData.game.creator || gameCreator;
+                }
+            } catch (e) {
+                console.warn('Could not fetch game info:', e);
+            }
+        }
+        
+        // ═══════════════════════════════════════════════════════════
+        // ФОРМИРУЕМ ДАННЫЕ ДЛЯ КЛИЕНТА
+        // ═══════════════════════════════════════════════════════════
         const launchData = {
             username: currentUser.username,
             odilId: currentUser.odilId,
             host: data.wsHost || window.location.hostname || 'localhost',
             port: data.wsPort || 3000,
             gameId: gameId,
-            token: data.token
+            token: data.token,
+            // Добавляем данные игры
+            gameName: gameName,
+            creatorName: gameCreator,
+            description: data.description || '',
+            maxPlayers: data.maxPlayers || 10
         };
         
         const jsonStr = JSON.stringify(launchData);
@@ -440,6 +467,7 @@ async function launchGame(gameId) {
         
         console.log('[Launch] URL:', launchUrl);
         console.log('[Launch] Data:', launchData);
+        console.log('[Launch] Game:', gameName, 'by', gameCreator);
         
         // Пытаемся открыть клиент
         const clientFound = await detectClientLaunch(launchUrl);
@@ -451,7 +479,6 @@ async function launchGame(gameId) {
                 toast('Game launched! 🎮');
             }, 3000);
         } else {
-            // Клиент не найден — предлагаем скачать
             setLaunchState('notfound');
         }
         
@@ -462,17 +489,6 @@ async function launchGame(gameId) {
         if (errMsg) errMsg.textContent = 'Connection error. Please try again.';
     }
 }
-
-function playGame(gameId) {
-    if (!currentUser) {
-        toast('Please log in to play', 'error');
-        return;
-    }
-    
-    openPlayModal();
-    launchGame(gameId);
-}
-
 function shareGame(gameId) {
     navigator.clipboard.writeText(`${location.origin}/game/${gameId}`);
     toast('Link copied!');

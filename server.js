@@ -1258,65 +1258,61 @@ app.get('/api/game/:id/servers', async (req, res) => {
     }
 });
 
-// ============================================
-// AUTH MIDDLEWARE
-// ============================================
-function requireAuth(req, res, next) {
-    if (!req.session || !req.session.user) {
-        return res.json({ success: false, message: 'Not authenticated' });
-    }
-    next();
-}
 
-// Альтернативная версия с редиректом для страниц
-function requireAuthPage(req, res, next) {
-    if (!req.session || !req.session.user) {
-        return res.redirect('/');
-    }
-    next();
-}
+// ═══════════════════════════════════════════════════════════════
+// API - GAME LAUNCH
+// ═══════════════════════════════════════════════════════════════
 
-app.post('/api/game/launch', requireAuth, async (req, res) => {
+app.post('/api/game/launch', authAPI, async (req, res) => {
     try {
         const { gameId } = req.body;
-        const user = req.session.user;
+        const user = req.user; // <-- из authAPI middleware
+        
+        if (!gameId) {
+            return res.json({ success: false, message: 'Game ID required' });
+        }
         
         // Получаем данные игры
-        const game = await getGameById(gameId); // твоя функция
+        const game = await Game.findOne({ id: gameId });
         
         if (!game) {
             return res.json({ success: false, message: 'Game not found' });
         }
         
         // Создаём токен сессии
-        const token = generateLaunchToken(user, gameId);
+        const token = crypto.randomBytes(32).toString('hex');
         
-        // Сохраняем токен для валидации
-        await saveLaunchToken(token, {
+        // Сохраняем токен в БД
+        await LaunchToken.create({
+            token: token,
             odilId: user.odilId,
             username: user.username,
-            gameId: gameId,
-            createdAt: Date.now()
+            gameId: gameId
         });
+        
+        // Увеличиваем счётчик визитов
+        await Game.findOneAndUpdate(
+            { id: gameId },
+            { $inc: { visits: 1 } }
+        );
+        
+        console.log(`[Launch] ${user.username} (#${user.odilId}) -> ${gameId}`);
         
         res.json({
             success: true,
             token: token,
             wsHost: process.env.WS_HOST || 'tublox.onrender.com',
-            wsPort: process.env.WS_PORT || 443,
+            wsPort: parseInt(process.env.WS_PORT) || 443,
             gameId: gameId,
-            // ═══════════════════════════════════════════════════════════
-            // ДОБАВЛЯЕМ ДАННЫЕ ИГРЫ
-            // ═══════════════════════════════════════════════════════════
-            gameName: game.title || game.name || 'TuBlox World',
-            creatorName: game.creator || game.creatorName || '',
+            gameName: game.title || 'TuBlox World',
+            creatorName: game.creator || '',
             description: game.description || '',
-            maxPlayers: game.maxPlayers || 10,
+            maxPlayers: game.maxPlayers || 50,
             thumbnail: game.thumbnail || ''
         });
         
     } catch (e) {
-        console.error('Launch error:', e);
+        console.error('[Launch] Error:', e);
         res.json({ success: false, message: 'Server error' });
     }
 });
@@ -1325,40 +1321,48 @@ app.get('/api/game/validate/:token', async (req, res) => {
     try {
         const { token } = req.params;
         
+        if (!token) {
+            return res.json({ success: false, message: 'Token required' });
+        }
+        
         // Проверяем токен
-        const session = await getLaunchToken(token);
+        const session = await LaunchToken.findOne({ token: token });
         
         if (!session) {
             return res.json({ success: false, message: 'Invalid or expired token' });
         }
         
         // Получаем данные игры
-        const game = await getGameById(session.gameId);
+        const game = await Game.findOne({ id: session.gameId });
         
         // Получаем данные пользователя
-        const user = await getUserByOdilId(session.odilId);
+        const user = await User.findOne({ odilId: session.odilId });
+        
+        if (!user) {
+            return res.json({ success: false, message: 'User not found' });
+        }
+        
+        console.log(`[Validate] ${user.username} (#${user.odilId}) -> ${session.gameId}`);
+        
+        // Удаляем использованный токен
+        await LaunchToken.deleteOne({ token: token });
         
         res.json({
             success: true,
             username: user.username,
             odilId: user.odilId,
             gameId: session.gameId,
-            // ═══════════════════════════════════════════════════════════
-            // ДАННЫЕ ИГРЫ
-            // ═══════════════════════════════════════════════════════════
-            gameName: game?.title || game?.name || 'TuBlox World',
-            creatorName: game?.creator || game?.creatorName || '',
+            gameName: game?.title || 'TuBlox World',
+            creatorName: game?.creator || '',
             description: game?.description || '',
-            maxPlayers: game?.maxPlayers || 10,
-            // WebSocket
+            maxPlayers: game?.maxPlayers || 50,
             wsHost: process.env.WS_HOST || 'tublox.onrender.com',
             wsPort: parseInt(process.env.WS_PORT) || 443,
-            // Build data если есть
             buildData: game?.buildData || null
         });
         
     } catch (e) {
-        console.error('Validate error:', e);
+        console.error('[Validate] Error:', e);
         res.json({ success: false, message: 'Server error' });
     }
 });

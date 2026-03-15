@@ -1,5 +1,5 @@
 // ============================================
-// TuForums Client - Fixed Version
+// TuForums Client
 // ============================================
 
 (function() {
@@ -12,11 +12,55 @@
     let currentPostId = null;
 
     // ============================================
-    // DOM ELEMENTS
+    // HELPERS
     // ============================================
     
-    const $ = (id) => document.getElementById(id);
-    
+    function $(id) {
+        return document.getElementById(id);
+    }
+
+    function escapeHtml(text) {
+        if (!text) return '';
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+
+    function truncate(text, len) {
+        if (!text) return '';
+        if (text.length <= len) return text;
+        return text.substring(0, len) + '...';
+    }
+
+    function formatTimeAgo(dateStr) {
+        if (!dateStr) return '';
+        const now = Date.now();
+        const date = new Date(dateStr).getTime();
+        const diff = Math.floor((now - date) / 1000);
+        
+        if (diff < 60) return `${diff}s ago`;
+        if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+        if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+        if (diff < 604800) return `${Math.floor(diff / 86400)}d ago`;
+        return new Date(dateStr).toLocaleDateString();
+    }
+
+    function formatNumber(n) {
+        if (!n) return '0';
+        if (n >= 1000000) return (n / 1000000).toFixed(1) + 'M';
+        if (n >= 1000) return (n / 1000).toFixed(1) + 'K';
+        return n.toString();
+    }
+
+    function getInitials(name) {
+        if (!name) return '?';
+        return name.substring(0, 2).toUpperCase();
+    }
+
+    function isStaff(username) {
+        return STAFF_USERS.includes((username || '').toLowerCase());
+    }
+
     // ============================================
     // INIT
     // ============================================
@@ -25,8 +69,8 @@
         console.log('[Forum] Initializing...');
         
         await loadUser();
-        await loadStats();
-        await loadRecentActivity();
+        loadStats();
+        loadRecentActivity();
         setupEventListeners();
         
         console.log('[Forum] Ready');
@@ -41,19 +85,15 @@
                 document.querySelectorAll('.username').forEach(el => {
                     el.textContent = data.user.username;
                 });
-                console.log('[Forum] User loaded:', data.user.username);
+                console.log('[Forum] User:', data.user.username);
             }
         } catch (err) {
             console.error('[Forum] Load user error:', err);
         }
     }
 
-    function isStaff(username) {
-        return STAFF_USERS.includes((username || '').toLowerCase());
-    }
-
     // ============================================
-    // STATS
+    // LOAD STATS
     // ============================================
 
     async function loadStats() {
@@ -62,43 +102,37 @@
             const data = await res.json();
             
             if (data.success) {
-                // Total stats
-                const totalPosts = $('stat-total-posts');
-                const totalReplies = $('stat-total-replies');
+                const el1 = $('stat-total-posts');
+                const el2 = $('stat-total-replies');
+                if (el1) el1.textContent = formatNumber(data.total.posts);
+                if (el2) el2.textContent = formatNumber(data.total.replies);
                 
-                if (totalPosts) totalPosts.textContent = formatNumber(data.total.posts);
-                if (totalReplies) totalReplies.textContent = formatNumber(data.total.replies);
-                
-                // Category stats
                 const cats = data.categories || {};
                 
-                // Updates
-                const updatesThreads = $('stat-updates-threads');
-                const updatesPosts = $('stat-updates-posts');
-                if (updatesThreads) updatesThreads.textContent = formatNumber(cats.updates?.threads || 0);
-                if (updatesPosts) updatesPosts.textContent = formatNumber(cats.updates?.posts || 0);
+                const u1 = $('stat-updates-threads');
+                const u2 = $('stat-updates-posts');
+                if (u1) u1.textContent = formatNumber(cats.updates?.threads || 0);
+                if (u2) u2.textContent = formatNumber(cats.updates?.posts || 0);
                 
-                // General
-                const generalThreads = $('stat-general-threads');
-                const generalPosts = $('stat-general-posts');
-                if (generalThreads) generalThreads.textContent = formatNumber(cats.general?.threads || 0);
-                if (generalPosts) generalPosts.textContent = formatNumber(cats.general?.posts || 0);
+                const g1 = $('stat-general-threads');
+                const g2 = $('stat-general-posts');
+                if (g1) g1.textContent = formatNumber(cats.general?.threads || 0);
+                if (g2) g2.textContent = formatNumber(cats.general?.posts || 0);
                 
-                // Off Topic
-                const offtopicThreads = $('stat-offtopic-threads');
-                const offtopicPosts = $('stat-offtopic-posts');
-                if (offtopicThreads) offtopicThreads.textContent = formatNumber(cats.offtopic?.threads || 0);
-                if (offtopicPosts) offtopicPosts.textContent = formatNumber(cats.offtopic?.posts || 0);
+                const o1 = $('stat-offtopic-threads');
+                const o2 = $('stat-offtopic-posts');
+                if (o1) o1.textContent = formatNumber(cats.offtopic?.threads || 0);
+                if (o2) o2.textContent = formatNumber(cats.offtopic?.posts || 0);
                 
                 console.log('[Forum] Stats loaded');
             }
         } catch (err) {
-            console.error('[Forum] Load stats error:', err);
+            console.error('[Forum] Stats error:', err);
         }
     }
 
     // ============================================
-    // RECENT ACTIVITY
+    // LOAD RECENT ACTIVITY
     // ============================================
 
     async function loadRecentActivity() {
@@ -113,25 +147,37 @@
             const data = await res.json();
             
             if (data.success && data.activity && data.activity.length > 0) {
-                container.innerHTML = data.activity.map(item => `
-                    <div class="recent-item" onclick="openThread('${item.isReply ? item.originalPostId : item._id}')">
-                        <div class="recent-avatar">${getInitials(item.author)}</div>
-                        <div class="recent-content">
-                            <div class="recent-title">${escapeHtml(truncate(item.content, 60))}</div>
-                            <div class="recent-meta">
-                                <span class="recent-author">${escapeHtml(item.author)}</span>
-                                <span>•</span>
-                                <span class="recent-time">${formatTimeAgo(item.createdAt)}</span>
+                container.innerHTML = data.activity.map(item => {
+                    const postId = item.isReply ? item.originalPostId : item._id;
+                    return `
+                        <div class="recent-item" data-post-id="${postId}">
+                            <div class="recent-avatar">${getInitials(item.author)}</div>
+                            <div class="recent-content">
+                                <div class="recent-title">${escapeHtml(truncate(item.content, 50))}</div>
+                                <div class="recent-meta">
+                                    <span class="recent-author">${escapeHtml(item.author)}</span>
+                                    <span>•</span>
+                                    <span class="recent-time">${formatTimeAgo(item.createdAt)}</span>
+                                </div>
                             </div>
                         </div>
-                    </div>
-                `).join('');
-                console.log('[Forum] Recent activity loaded:', data.activity.length);
+                    `;
+                }).join('');
+                
+                // Add click handlers
+                container.querySelectorAll('.recent-item').forEach(item => {
+                    item.addEventListener('click', () => {
+                        const postId = item.dataset.postId;
+                        if (postId) openThread(postId);
+                    });
+                });
+                
+                console.log('[Forum] Recent activity loaded');
             } else {
                 container.innerHTML = '<div class="recent-empty">No recent activity</div>';
             }
         } catch (err) {
-            console.error('[Forum] Load recent error:', err);
+            console.error('[Forum] Recent error:', err);
             container.innerHTML = '<div class="recent-empty">Failed to load</div>';
         }
     }
@@ -140,7 +186,7 @@
     // CATEGORY MODAL
     // ============================================
 
-    window.openCategory = function(category) {
+    function openCategory(category) {
         currentCategory = category;
         
         const titles = {
@@ -155,24 +201,24 @@
         const modal = $('category-modal');
         if (modal) modal.classList.add('active');
         
-        // Hide post form for updates (staff only)
-        const postForm = $('form-new-post');
-        if (postForm) {
+        // Hide form for updates if not staff
+        const form = $('form-new-post');
+        if (form) {
             if (category === 'updates' && !isStaff(currentUser?.username)) {
-                postForm.style.display = 'none';
+                form.style.display = 'none';
             } else {
-                postForm.style.display = 'block';
+                form.style.display = 'block';
             }
         }
         
         loadPosts(category);
-    };
+    }
 
-    window.closeCategoryModal = function() {
+    function closeCategoryModal() {
         const modal = $('category-modal');
         if (modal) modal.classList.remove('active');
         currentCategory = null;
-    };
+    }
 
     async function loadPosts(category) {
         const container = $('category-posts-list');
@@ -187,7 +233,7 @@
             if (data.success && data.posts && data.posts.length > 0) {
                 container.innerHTML = data.posts.map(post => `
                     <div class="post-item ${post.isPinned ? 'pinned' : ''} ${post.isStaffPost ? 'staff-post' : ''}" 
-                         onclick="openThread('${post._id}')">
+                         data-post-id="${post._id}">
                         <div class="post-avatar">${getInitials(post.author)}</div>
                         <div class="post-body">
                             <div class="post-header">
@@ -205,6 +251,13 @@
                         </div>
                     </div>
                 `).join('');
+                
+                // Click handlers
+                container.querySelectorAll('.post-item').forEach(item => {
+                    item.addEventListener('click', () => {
+                        openThread(item.dataset.postId);
+                    });
+                });
             } else {
                 container.innerHTML = `
                     <div class="posts-empty">
@@ -223,14 +276,15 @@
     // THREAD MODAL
     // ============================================
 
-    window.openThread = async function(postId) {
+    async function openThread(postId) {
         currentPostId = postId;
         
-        // Close category modal, open thread modal
+        // Close category modal
         const catModal = $('category-modal');
-        const threadModal = $('thread-modal');
-        
         if (catModal) catModal.classList.remove('active');
+        
+        // Open thread modal
+        const threadModal = $('thread-modal');
         if (threadModal) threadModal.classList.add('active');
         
         const container = $('thread-view-content');
@@ -248,23 +302,23 @@
                 container.innerHTML = '<div class="posts-empty">Post not found</div>';
             }
         } catch (err) {
-            console.error('[Forum] Load thread error:', err);
+            console.error('[Forum] Thread error:', err);
             container.innerHTML = '<div class="posts-empty">Failed to load</div>';
         }
-    };
+    }
 
-    window.closeThreadModal = function() {
-        const threadModal = $('thread-modal');
-        if (threadModal) threadModal.classList.remove('active');
+    function closeThreadModal() {
+        const modal = $('thread-modal');
+        if (modal) modal.classList.remove('active');
         
-        // Re-open category modal if we had one
+        // Re-open category if we had one
         if (currentCategory) {
             const catModal = $('category-modal');
             if (catModal) catModal.classList.add('active');
         }
         
         currentPostId = null;
-    };
+    }
 
     function renderThread(post) {
         const container = $('thread-view-content');
@@ -278,15 +332,15 @@
             repliesHtml = `
                 <div class="replies-section">
                     <div class="replies-header">${post.replies.length} Replies</div>
-                    ${post.replies.map(reply => `
+                    ${post.replies.map(r => `
                         <div class="reply-item">
-                            <div class="reply-avatar">${getInitials(reply.author)}</div>
+                            <div class="reply-avatar">${getInitials(r.author)}</div>
                             <div class="reply-body">
                                 <div class="reply-header">
-                                    <span class="reply-author ${isStaff(reply.author) ? 'staff' : ''}">${escapeHtml(reply.author)}</span>
-                                    <span class="reply-time">${formatTimeAgo(reply.createdAt)}</span>
+                                    <span class="reply-author ${isStaff(r.author) ? 'staff' : ''}">${escapeHtml(r.author)}</span>
+                                    <span class="reply-time">${formatTimeAgo(r.createdAt)}</span>
                                 </div>
-                                <div class="reply-text">${escapeHtml(reply.content)}</div>
+                                <div class="reply-text">${escapeHtml(r.content)}</div>
                             </div>
                         </div>
                     `).join('')}
@@ -303,8 +357,8 @@
                         <div class="thread-time">${formatTimeAgo(post.createdAt)}</div>
                     </div>
                     <div class="thread-actions">
-                        ${canPin ? `<button class="thread-action-btn" onclick="pinPost('${post._id}')">${post.isPinned ? 'Unpin' : 'Pin'}</button>` : ''}
-                        ${canDelete ? `<button class="thread-action-btn delete" onclick="deletePost('${post._id}')">Delete</button>` : ''}
+                        ${canPin ? `<button class="thread-action-btn" id="btn-pin-post">${post.isPinned ? 'Unpin' : 'Pin'}</button>` : ''}
+                        ${canDelete ? `<button class="thread-action-btn delete" id="btn-delete-post">Delete</button>` : ''}
                     </div>
                 </div>
                 <div class="thread-text">${escapeHtml(post.content)}</div>
@@ -316,18 +370,34 @@
                 <textarea id="input-reply-content" placeholder="Write a reply..." maxlength="1000" rows="3"></textarea>
                 <div class="reply-form-actions">
                     <span class="char-counter"><span id="reply-char-counter">0</span>/1000</span>
-                    <button class="btn btn-primary btn-sm" onclick="submitReply()">Reply</button>
+                    <button class="btn btn-primary btn-sm" id="btn-submit-reply">Reply</button>
                 </div>
             </div>
         `;
         
-        // Setup char counter for reply
+        // Event listeners
         const replyInput = $('input-reply-content');
-        if (replyInput) {
+        const replyCounter = $('reply-char-counter');
+        const replyBtn = $('btn-submit-reply');
+        
+        if (replyInput && replyCounter) {
             replyInput.addEventListener('input', () => {
-                const counter = $('reply-char-counter');
-                if (counter) counter.textContent = replyInput.value.length;
+                replyCounter.textContent = replyInput.value.length;
             });
+        }
+        
+        if (replyBtn) {
+            replyBtn.addEventListener('click', () => submitReply(post._id));
+        }
+        
+        const pinBtn = $('btn-pin-post');
+        if (pinBtn) {
+            pinBtn.addEventListener('click', () => pinPost(post._id));
+        }
+        
+        const deleteBtn = $('btn-delete-post');
+        if (deleteBtn) {
+            deleteBtn.addEventListener('click', () => deletePost(post._id));
         }
     }
 
@@ -335,7 +405,7 @@
     // ACTIONS
     // ============================================
 
-    window.submitPost = async function() {
+    async function submitPost() {
         const input = $('input-post-content');
         if (!input) return;
         
@@ -365,27 +435,28 @@
                 loadPosts(currentCategory);
                 loadStats();
                 loadRecentActivity();
-                toast('Posted!');
+                
+                if (typeof toast === 'function') toast('Posted!');
             } else {
-                toast(data.message || 'Failed to post', 'error');
+                if (typeof toast === 'function') toast(data.message || 'Failed', 'error');
             }
         } catch (err) {
-            console.error('[Forum] Submit post error:', err);
-            toast('Failed to post', 'error');
+            console.error('[Forum] Post error:', err);
+            if (typeof toast === 'function') toast('Failed to post', 'error');
         }
         
         if (btn) btn.disabled = false;
-    };
+    }
 
-    window.submitReply = async function() {
+    async function submitReply(postId) {
         const input = $('input-reply-content');
-        if (!input || !currentPostId) return;
+        if (!input || !postId) return;
         
         const content = input.value.trim();
         if (!content) return;
         
         try {
-            const res = await fetch(`/api/forum/posts/${currentPostId}/reply`, {
+            const res = await fetch(`/api/forum/posts/${postId}/reply`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ content })
@@ -397,17 +468,17 @@
                 renderThread(data.post);
                 loadStats();
                 loadRecentActivity();
-                toast('Replied!');
+                if (typeof toast === 'function') toast('Replied!');
             } else {
-                toast(data.message || 'Failed to reply', 'error');
+                if (typeof toast === 'function') toast(data.message || 'Failed', 'error');
             }
         } catch (err) {
-            console.error('[Forum] Submit reply error:', err);
-            toast('Failed to reply', 'error');
+            console.error('[Forum] Reply error:', err);
+            if (typeof toast === 'function') toast('Failed to reply', 'error');
         }
-    };
+    }
 
-    window.deletePost = async function(postId) {
+    async function deletePost(postId) {
         if (!confirm('Delete this post?')) return;
         
         try {
@@ -419,22 +490,19 @@
             
             if (data.success) {
                 closeThreadModal();
-                if (currentCategory) {
-                    loadPosts(currentCategory);
-                }
+                if (currentCategory) loadPosts(currentCategory);
                 loadStats();
                 loadRecentActivity();
-                toast('Deleted');
+                if (typeof toast === 'function') toast('Deleted');
             } else {
-                toast(data.message || 'Failed to delete', 'error');
+                if (typeof toast === 'function') toast(data.message || 'Failed', 'error');
             }
         } catch (err) {
             console.error('[Forum] Delete error:', err);
-            toast('Failed to delete', 'error');
         }
-    };
+    }
 
-    window.pinPost = async function(postId) {
+    async function pinPost(postId) {
         try {
             const res = await fetch(`/api/forum/posts/${postId}/pin`, {
                 method: 'POST'
@@ -444,15 +512,12 @@
             
             if (data.success) {
                 openThread(postId);
-                toast(data.isPinned ? 'Pinned' : 'Unpinned');
-            } else {
-                toast(data.message || 'Failed', 'error');
+                if (typeof toast === 'function') toast(data.isPinned ? 'Pinned' : 'Unpinned');
             }
         } catch (err) {
             console.error('[Forum] Pin error:', err);
-            toast('Failed', 'error');
         }
-    };
+    }
 
     // ============================================
     // EVENT LISTENERS
@@ -467,36 +532,53 @@
             });
         });
         
-        // Post content input
+        // Post form
         const postInput = $('input-post-content');
-        const submitBtn = $('btn-submit-post');
-        const charCount = $('post-char-count');
+        const postBtn = $('btn-submit-post');
+        const postCounter = $('post-char-count');
         
-        if (postInput && submitBtn && charCount) {
+        if (postInput && postBtn && postCounter) {
             postInput.addEventListener('input', () => {
                 const len = postInput.value.length;
-                charCount.textContent = len;
-                submitBtn.disabled = len === 0 || len > 2000;
+                postCounter.textContent = len;
+                postBtn.disabled = len === 0 || len > 2000;
             });
             
-            submitBtn.addEventListener('click', submitPost);
+            postBtn.addEventListener('click', submitPost);
             
-            // Ctrl+Enter to submit
             postInput.addEventListener('keydown', (e) => {
-                if (e.key === 'Enter' && e.ctrlKey && !submitBtn.disabled) {
+                if (e.key === 'Enter' && e.ctrlKey && !postBtn.disabled) {
                     e.preventDefault();
                     submitPost();
                 }
             });
         }
         
-        // Modal backdrops
+        // Close buttons
+        const closeCatBtn = $('close-category-modal');
+        if (closeCatBtn) {
+            closeCatBtn.addEventListener('click', closeCategoryModal);
+        }
+        
+        const closeThreadBtn = $('close-thread-modal');
+        if (closeThreadBtn) {
+            closeThreadBtn.addEventListener('click', closeThreadModal);
+        }
+        
+        const backBtn = $('btn-back-thread');
+        if (backBtn) {
+            backBtn.addEventListener('click', closeThreadModal);
+        }
+        
+        // Backdrops
         document.querySelectorAll('.modal-backdrop').forEach(backdrop => {
             backdrop.addEventListener('click', () => {
                 const modal = backdrop.closest('.modal');
-                if (modal) modal.classList.remove('active');
-                currentCategory = null;
-                currentPostId = null;
+                if (modal) {
+                    modal.classList.remove('active');
+                    if (modal.id === 'category-modal') currentCategory = null;
+                    if (modal.id === 'thread-modal') currentPostId = null;
+                }
             });
         });
         
@@ -517,60 +599,14 @@
     }
 
     // ============================================
-    // UTILITIES
-    // ============================================
-
-    function escapeHtml(text) {
-        if (!text) return '';
-        const div = document.createElement('div');
-        div.textContent = text;
-        return div.innerHTML;
-    }
-
-    function truncate(text, len) {
-        if (!text) return '';
-        if (text.length <= len) return text;
-        return text.substring(0, len) + '...';
-    }
-
-    function formatTimeAgo(dateStr) {
-        if (!dateStr) return '';
-        const now = Date.now();
-        const date = new Date(dateStr).getTime();
-        const diff = Math.floor((now - date) / 1000);
-        
-        if (diff < 60) return `${diff}s`;
-        if (diff < 3600) return `${Math.floor(diff / 60)}m`;
-        if (diff < 86400) return `${Math.floor(diff / 3600)}h`;
-        if (diff < 604800) return `${Math.floor(diff / 86400)}d`;
-        return new Date(dateStr).toLocaleDateString();
-    }
-
-    function formatNumber(n) {
-        if (!n) return '0';
-        if (n >= 1000000) return (n / 1000000).toFixed(1) + 'M';
-        if (n >= 1000) return (n / 1000).toFixed(1) + 'K';
-        return n.toString();
-    }
-
-    function getInitials(name) {
-        if (!name) return '?';
-        return name.substring(0, 2).toUpperCase();
-    }
-
-    // ============================================
-    // INIT ON DOM READY
+    // START
     // ============================================
 
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', () => {
-            if (document.querySelector('.forums-page')) {
-                init();
-            }
+            if (document.querySelector('.forums-page')) init();
         });
     } else {
-        if (document.querySelector('.forums-page')) {
-            init();
-        }
+        if (document.querySelector('.forums-page')) init();
     }
 })();

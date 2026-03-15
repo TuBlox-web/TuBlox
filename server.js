@@ -1366,6 +1366,43 @@ app.get('/api/game/validate/:token', async (req, res) => {
         res.json({ success: false, message: 'Server error' });
     }
 });
+
+// ═══════════════════════════════════════════════════════════════
+// API - ADMIN (только для разработки)
+// ═══════════════════════════════════════════════════════════════
+
+app.post('/api/admin/delete-user', async (req, res) => {
+    try {
+        const { username, adminKey } = req.body;
+        
+        // Простая защита (замени на свой ключ)
+        if (adminKey !== 'ASFLSDHJKL@#$YH%(*DSHGJDSH$@#(*%YKSFDJHGJKSDH#@($DHSGKjds') {
+            return res.status(403).json({ success: false, message: 'Forbidden' });
+        }
+        
+        if (!username) {
+            return res.json({ success: false, message: 'Username required' });
+        }
+        
+        const user = await User.findOneAndDelete({ username: username.toLowerCase() });
+        
+        if (!user) {
+            return res.json({ success: false, message: 'User not found' });
+        }
+        
+        console.log(`[Admin] Deleted user: ${user.username} (#${user.odilId})`);
+        
+        res.json({ 
+            success: true, 
+            message: `Deleted ${user.username} (#${user.odilId})` 
+        });
+        
+    } catch (e) {
+        console.error('[Admin] Delete error:', e);
+        res.json({ success: false, message: 'Server error' });
+    }
+});
+
 // ═══════════════════════════════════════════════════════════════
 // DOWNLOADS
 // ═══════════════════════════════════════════════════════════════

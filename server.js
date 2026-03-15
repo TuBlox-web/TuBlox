@@ -1258,7 +1258,23 @@ app.get('/api/game/:id/servers', async (req, res) => {
     }
 });
 
-// server.js или routes/game.js
+// ============================================
+// AUTH MIDDLEWARE
+// ============================================
+function requireAuth(req, res, next) {
+    if (!req.session || !req.session.user) {
+        return res.json({ success: false, message: 'Not authenticated' });
+    }
+    next();
+}
+
+// Альтернативная версия с редиректом для страниц
+function requireAuthPage(req, res, next) {
+    if (!req.session || !req.session.user) {
+        return res.redirect('/');
+    }
+    next();
+}
 
 app.post('/api/game/launch', requireAuth, async (req, res) => {
     try {

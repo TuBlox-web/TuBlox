@@ -1,5 +1,5 @@
 // ============================================
-// TuForums Client
+// TuForums Client - FIXED
 // ============================================
 
 (function() {
@@ -16,7 +16,9 @@
     // ============================================
     
     function $(id) {
-        return document.getElementById(id);
+        const el = document.getElementById(id);
+        if (!el) console.warn('[Forum] Element not found:', id);
+        return el;
     }
 
     function escapeHtml(text) {
@@ -65,13 +67,17 @@
     // INIT
     // ============================================
     
-    async function init() {
+    function init() {
         console.log('[Forum] Initializing...');
         
-        await loadUser();
-        loadStats();
-        loadRecentActivity();
+        // Сначала настраиваем listeners
         setupEventListeners();
+        
+        // Потом загружаем данные
+        loadUser().then(() => {
+            loadStats();
+            loadRecentActivity();
+        });
         
         console.log('[Forum] Ready');
     }
@@ -136,15 +142,22 @@
     // ============================================
 
     async function loadRecentActivity() {
-        const container = $('recent-activity-list');
+        // Ищем элемент напрямую
+        const container = document.getElementById('recent-activity-list');
+        
         if (!container) {
-            console.error('[Forum] recent-activity-list not found');
+            console.error('[Forum] Container #recent-activity-list not found in DOM');
+            console.log('[Forum] Available IDs:', Array.from(document.querySelectorAll('[id]')).map(e => e.id));
             return;
         }
+        
+        console.log('[Forum] Loading recent activity...');
         
         try {
             const res = await fetch('/api/forum/recent');
             const data = await res.json();
+            
+            console.log('[Forum] Recent data:', data);
             
             if (data.success && data.activity && data.activity.length > 0) {
                 container.innerHTML = data.activity.map(item => {
@@ -172,9 +185,10 @@
                     });
                 });
                 
-                console.log('[Forum] Recent activity loaded');
+                console.log('[Forum] Recent activity loaded:', data.activity.length, 'items');
             } else {
                 container.innerHTML = '<div class="recent-empty">No recent activity</div>';
+                console.log('[Forum] No recent activity');
             }
         } catch (err) {
             console.error('[Forum] Recent error:', err);
@@ -375,10 +389,10 @@
             </div>
         `;
         
-        // Event listeners
-        const replyInput = $('input-reply-content');
-        const replyCounter = $('reply-char-counter');
-        const replyBtn = $('btn-submit-reply');
+        // Event listeners для динамических элементов
+        const replyInput = document.getElementById('input-reply-content');
+        const replyCounter = document.getElementById('reply-char-counter');
+        const replyBtn = document.getElementById('btn-submit-reply');
         
         if (replyInput && replyCounter) {
             replyInput.addEventListener('input', () => {
@@ -390,12 +404,12 @@
             replyBtn.addEventListener('click', () => submitReply(post._id));
         }
         
-        const pinBtn = $('btn-pin-post');
+        const pinBtn = document.getElementById('btn-pin-post');
         if (pinBtn) {
             pinBtn.addEventListener('click', () => pinPost(post._id));
         }
         
-        const deleteBtn = $('btn-delete-post');
+        const deleteBtn = document.getElementById('btn-delete-post');
         if (deleteBtn) {
             deleteBtn.addEventListener('click', () => deletePost(post._id));
         }
@@ -406,13 +420,13 @@
     // ============================================
 
     async function submitPost() {
-        const input = $('input-post-content');
+        const input = document.getElementById('input-post-content');
         if (!input) return;
         
         const content = input.value.trim();
         if (!content) return;
         
-        const btn = $('btn-submit-post');
+        const btn = document.getElementById('btn-submit-post');
         if (btn) btn.disabled = true;
         
         try {
@@ -429,7 +443,7 @@
             
             if (data.success) {
                 input.value = '';
-                const counter = $('post-char-count');
+                const counter = document.getElementById('post-char-count');
                 if (counter) counter.textContent = '0';
                 
                 loadPosts(currentCategory);
@@ -449,7 +463,7 @@
     }
 
     async function submitReply(postId) {
-        const input = $('input-reply-content');
+        const input = document.getElementById('input-reply-content');
         if (!input || !postId) return;
         
         const content = input.value.trim();
@@ -533,9 +547,9 @@
         });
         
         // Post form
-        const postInput = $('input-post-content');
-        const postBtn = $('btn-submit-post');
-        const postCounter = $('post-char-count');
+        const postInput = document.getElementById('input-post-content');
+        const postBtn = document.getElementById('btn-submit-post');
+        const postCounter = document.getElementById('post-char-count');
         
         if (postInput && postBtn && postCounter) {
             postInput.addEventListener('input', () => {
@@ -555,17 +569,17 @@
         }
         
         // Close buttons
-        const closeCatBtn = $('close-category-modal');
+        const closeCatBtn = document.getElementById('close-category-modal');
         if (closeCatBtn) {
             closeCatBtn.addEventListener('click', closeCategoryModal);
         }
         
-        const closeThreadBtn = $('close-thread-modal');
+        const closeThreadBtn = document.getElementById('close-thread-modal');
         if (closeThreadBtn) {
             closeThreadBtn.addEventListener('click', closeThreadModal);
         }
         
-        const backBtn = $('btn-back-thread');
+        const backBtn = document.getElementById('btn-back-thread');
         if (backBtn) {
             backBtn.addEventListener('click', closeThreadModal);
         }
@@ -583,7 +597,7 @@
         });
         
         // Logout
-        const logoutBtn = $('logout-btn');
+        const logoutBtn = document.getElementById('logout-btn');
         if (logoutBtn) {
             logoutBtn.addEventListener('click', () => {
                 if (typeof logout === 'function') {
@@ -599,14 +613,24 @@
     }
 
     // ============================================
-    // START
+    // START - ЖДЁМ ПОЛНУЮ ЗАГРУЗКУ DOM
     // ============================================
 
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', () => {
-            if (document.querySelector('.forums-page')) init();
-        });
-    } else {
-        if (document.querySelector('.forums-page')) init();
+    function startWhenReady() {
+        if (document.querySelector('.forums-page')) {
+            init();
+        }
     }
+
+    // Гарантируем что DOM загружен
+    if (document.readyState === 'complete') {
+        startWhenReady();
+    } else if (document.readyState === 'interactive') {
+        // DOM ready, но ресурсы ещё грузятся
+        startWhenReady();
+    } else {
+        // Ещё загружается
+        document.addEventListener('DOMContentLoaded', startWhenReady);
+    }
+
 })();

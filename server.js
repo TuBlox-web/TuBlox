@@ -96,6 +96,9 @@ const DOMAIN_PATTERNS = [
 // ═══════════════════════════════════════════════════════════════
 // STAFF USERS
 // ═══════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════
+// TUFORUMS - STAFF
+// ═══════════════════════════════════════════════════════════════
 
 const STAFF_USERNAMES = ['today_idk'];
 
@@ -103,6 +106,8 @@ function isStaffUser(username) {
     if (!username) return false;
     return STAFF_USERNAMES.includes(username.toLowerCase());
 }
+
+
 
 // ═══════════════════════════════════════════════════════════════
 // VALIDATION & CENSORSHIP FUNCTIONS
@@ -1111,6 +1116,9 @@ const LaunchToken = mongoose.model('LaunchToken', launchTokenSchema);
 // ═══════════════════════════════════════════════════════════════
 // FORUM SCHEMA
 // ═══════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════
+// TUFORUMS - SCHEMA
+// ═══════════════════════════════════════════════════════════════
 
 const forumPostSchema = new mongoose.Schema({
     author: { type: String, required: true },
@@ -1119,11 +1127,10 @@ const forumPostSchema = new mongoose.Schema({
     category: { 
         type: String, 
         default: 'general',
-        enum: ['general', 'games', 'bugs', 'suggestions', 'announcements']
+        enum: ['updates', 'general', 'offtopic']
     },
     isStaffPost: { type: Boolean, default: false },
     isPinned: { type: Boolean, default: false },
-    likes: [{ type: Number }],
     replies: [{
         author: String,
         authorId: Number,
@@ -1133,6 +1140,9 @@ const forumPostSchema = new mongoose.Schema({
     }],
     createdAt: { type: Date, default: Date.now }
 });
+
+forumPostSchema.index({ category: 1, createdAt: -1 });
+forumPostSchema.index({ isPinned: -1, createdAt: -1 });
 
 const ForumPost = mongoose.model('ForumPost', forumPostSchema);
 
@@ -1572,6 +1582,7 @@ app.get('/TuForums/', auth, (req, res) => {
     res.sendFile(path.join(__dirname, 'pages', 'forums.html'));
 });
 
+
 // ═══════════════════════════════════════════════════════════════
 // API - USER
 // ═══════════════════════════════════════════════════════════════
@@ -1620,9 +1631,9 @@ app.get('/api/user/:id', async (req, res) => {
 
 app.get('/api/version', (req, res) => {
     res.json({
-        version: "0.3",
+        version: "0.4",
         downloadUrl: "https://tublox.onrender.com/download/TuClient.zip",
-        message: "Patch 0.3"
+        message: "Patch 0.4"
     });
 });
 
@@ -1898,41 +1909,155 @@ app.get('/api/game/validate/:token', async (req, res) => {
 // ═══════════════════════════════════════════════════════════════
 // API - FORUM (HTTP FALLBACK)
 // ═══════════════════════════════════════════════════════════════
+// Get forum stats
+app.get('/api/forum/stats', async (req, res) => {
+    try {
+        const stats = await ForumPost.aggregate([
+            {
+                $group: {
+                    _id: '$category',
+                    threads: { $sum: 1 },
+                    posts: { $sum: { $add: [1, { $size: '$replies' }] } }
+                }
+            }
+        ]);
+        
+        const totalPosts = await ForumPost.countDocuments();
+        const totalReplies = await ForumPost.aggregate([
+            { $project: { replyCount: { $size: '$replies' } } },
+            { $group: { _id: null, total: { $sum: '$replyCount' } } }
+        ]);
+        
+        const categoryStats = {};
+        stats.forEach(s => {
+            categoryStats[s._id] = { threads: s.threads, posts: s.posts };
+        });
+        
+        res.json({
+            success: true,
+            total: {
+                posts: totalPosts,
+                replies: totalReplies[0]?.total || 0
+            },
+            categories: categoryStats
+        });
+    } catch (err) {
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+});
 
+// Get posts by category
 app.get('/api/forum/posts', authAPI, async (req, res) => {
     try {
-        const { category } = req.query;
+        const { category, page = 1, limit = 20 } = req.query;
         const filter = {};
         
         if (category && category !== 'all') {
             filter.category = category;
         }
         
+        const skip = (parseInt(page) - 1) * parseInt(limit);
+        
         const posts = await ForumPost.find(filter)
             .sort({ isPinned: -1, createdAt: -1 })
-            .limit(50)
+            .skip(skip)
+            .limit(parseInt(limit))
             .lean();
         
-        res.json({ success: true, posts });
+        const total = await ForumPost.countDocuments(filter);
+        
+        res.json({ 
+            success: true, 
+            posts,
+            pagination: {
+                page: parseInt(page),
+                limit: parseInt(limit),
+                total,
+                pages: Math.ceil(total / parseInt(limit))
+            }
+        });
     } catch (err) {
-        console.error('[Forum API] Get posts error:', err);
         res.status(500).json({ success: false, message: 'Server error' });
     }
 });
 
+// Get single post with replies
+app.get('/api/forum/posts/:postId', authAPI, async (req, res) => {
+    try {
+        const post = await ForumPost.findById(req.params.postId).lean();
+        
+        if (!post) {
+            return res.status(404).json({ success: false, message: 'Post not found' });
+        }
+        
+        res.json({ success: true, post });
+    } catch (err) {
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+});
+
+// Get recent activity
+app.get('/api/forum/recent', async (req, res) => {
+    try {
+        const recentPosts = await ForumPost.find()
+            .sort({ createdAt: -1 })
+            .limit(15)
+            .select('author authorId content category createdAt replies')
+            .lean();
+        
+        // Также включаем посты с недавними реплаями
+        const postsWithRecentReplies = await ForumPost.aggregate([
+            { $unwind: '$replies' },
+            { $sort: { 'replies.createdAt': -1 } },
+            { $limit: 15 },
+            {
+                $project: {
+                    author: '$replies.author',
+                    authorId: '$replies.authorId',
+                    content: '$replies.content',
+                    category: 1,
+                    createdAt: '$replies.createdAt',
+                    isReply: { $literal: true },
+                    originalPostId: '$_id',
+                    originalContent: '$content'
+                }
+            }
+        ]);
+        
+        // Объединяем и сортируем
+        const allActivity = [...recentPosts.map(p => ({
+            ...p,
+            isReply: false
+        })), ...postsWithRecentReplies]
+            .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+            .slice(0, 15);
+        
+        res.json({ success: true, activity: allActivity });
+    } catch (err) {
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+});
+
+// Create post
 app.post('/api/forum/posts', authAPI, async (req, res) => {
     try {
-        const { content, category, isStaffPost, isPinned } = req.body;
+        const { content, category } = req.body;
         
         if (!content || content.trim().length === 0) {
             return res.status(400).json({ success: false, message: 'Content required' });
         }
         
         if (content.length > 2000) {
-            return res.status(400).json({ success: false, message: 'Content too long (max 2000)' });
+            return res.status(400).json({ success: false, message: 'Content too long' });
         }
         
         const isStaff = isStaffUser(req.user.username);
+        
+        // Only staff can post in updates
+        if (category === 'updates' && !isStaff) {
+            return res.status(403).json({ success: false, message: 'Staff only' });
+        }
+        
         const censoredContent = censorText(content.trim());
         
         const post = new ForumPost({
@@ -1940,27 +2065,18 @@ app.post('/api/forum/posts', authAPI, async (req, res) => {
             authorId: req.user.odilId,
             content: censoredContent,
             category: category || 'general',
-            isStaffPost: isStaff && isStaffPost === true,
-            isPinned: isStaff && isPinned === true
+            isStaffPost: isStaff
         });
         
         await post.save();
         
-        // Broadcast via WebSocket
-        broadcastToForum({
-            type: ForumPacketType.FORUM_POST_CREATED,
-            post: post.toObject()
-        });
-        
-        console.log(`[Forum API] New post by ${req.user.username}`);
-        
         res.json({ success: true, post: post.toObject() });
     } catch (err) {
-        console.error('[Forum API] Create post error:', err);
         res.status(500).json({ success: false, message: 'Server error' });
     }
 });
 
+// Reply to post
 app.post('/api/forum/posts/:postId/reply', authAPI, async (req, res) => {
     try {
         const { postId } = req.params;
@@ -1971,7 +2087,7 @@ app.post('/api/forum/posts/:postId/reply', authAPI, async (req, res) => {
         }
         
         if (content.length > 1000) {
-            return res.status(400).json({ success: false, message: 'Reply too long (max 1000)' });
+            return res.status(400).json({ success: false, message: 'Reply too long' });
         }
         
         const censoredContent = censorText(content.trim());
@@ -1995,52 +2111,13 @@ app.post('/api/forum/posts/:postId/reply', authAPI, async (req, res) => {
             return res.status(404).json({ success: false, message: 'Post not found' });
         }
         
-        // Broadcast via WebSocket
-        broadcastToForum({
-            type: ForumPacketType.FORUM_POST_UPDATED,
-            post: updatedPost
-        });
-        
         res.json({ success: true, post: updatedPost });
     } catch (err) {
-        console.error('[Forum API] Reply error:', err);
         res.status(500).json({ success: false, message: 'Server error' });
     }
 });
 
-app.post('/api/forum/posts/:postId/like', authAPI, async (req, res) => {
-    try {
-        const { postId } = req.params;
-        
-        const post = await ForumPost.findById(postId);
-        if (!post) {
-            return res.status(404).json({ success: false, message: 'Post not found' });
-        }
-        
-        const odilId = req.user.odilId;
-        const likeIndex = post.likes.indexOf(odilId);
-        
-        if (likeIndex === -1) {
-            post.likes.push(odilId);
-        } else {
-            post.likes.splice(likeIndex, 1);
-        }
-        
-        await post.save();
-        
-        // Broadcast via WebSocket
-        broadcastToForum({
-            type: ForumPacketType.FORUM_POST_UPDATED,
-            post: post.toObject()
-        });
-        
-        res.json({ success: true, liked: likeIndex === -1, likes: post.likes.length });
-    } catch (err) {
-        console.error('[Forum API] Like error:', err);
-        res.status(500).json({ success: false, message: 'Server error' });
-    }
-});
-
+// Delete post
 app.delete('/api/forum/posts/:postId', authAPI, async (req, res) => {
     try {
         const { postId } = req.params;
@@ -2059,30 +2136,20 @@ app.delete('/api/forum/posts/:postId', authAPI, async (req, res) => {
         
         await ForumPost.findByIdAndDelete(postId);
         
-        // Broadcast via WebSocket
-        broadcastToForum({
-            type: ForumPacketType.FORUM_POST_DELETED,
-            postId: postId
-        });
-        
-        console.log(`[Forum API] Post ${postId} deleted by ${req.user.username}`);
-        
         res.json({ success: true });
     } catch (err) {
-        console.error('[Forum API] Delete error:', err);
         res.status(500).json({ success: false, message: 'Server error' });
     }
 });
 
+// Pin post (staff only)
 app.post('/api/forum/posts/:postId/pin', authAPI, async (req, res) => {
     try {
-        const { postId } = req.params;
-        
         if (!isStaffUser(req.user.username)) {
             return res.status(403).json({ success: false, message: 'Staff only' });
         }
         
-        const post = await ForumPost.findById(postId);
+        const post = await ForumPost.findById(req.params.postId);
         if (!post) {
             return res.status(404).json({ success: false, message: 'Post not found' });
         }
@@ -2090,21 +2157,11 @@ app.post('/api/forum/posts/:postId/pin', authAPI, async (req, res) => {
         post.isPinned = !post.isPinned;
         await post.save();
         
-        // Broadcast via WebSocket
-        broadcastToForum({
-            type: ForumPacketType.FORUM_POST_UPDATED,
-            post: post.toObject()
-        });
-        
-        console.log(`[Forum API] Post ${postId} ${post.isPinned ? 'pinned' : 'unpinned'} by ${req.user.username}`);
-        
         res.json({ success: true, isPinned: post.isPinned });
     } catch (err) {
-        console.error('[Forum API] Pin error:', err);
         res.status(500).json({ success: false, message: 'Server error' });
     }
 });
-
 // ═══════════════════════════════════════════════════════════════
 // API - ADMIN
 // ═══════════════════════════════════════════════════════════════

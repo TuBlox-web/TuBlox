@@ -22,7 +22,6 @@ document.addEventListener('DOMContentLoaded', () => {
         initForumPost();
     }
     
-    // Char counters
     const titleInput = document.getElementById('post-title');
     const contentInput = document.getElementById('post-content');
     
@@ -68,7 +67,6 @@ function renderCategories() {
     
     let html = `
         <div class="category-item ${currentCategory === 'all' ? 'active' : ''}" data-category="all" onclick="selectCategory('all')">
-            <span class="category-icon">📋</span>
             <span class="category-name">All Posts</span>
         </div>
     `;
@@ -76,7 +74,6 @@ function renderCategories() {
     for (const cat of forumCategories) {
         html += `
             <div class="category-item ${currentCategory === cat.id ? 'active' : ''}" data-category="${cat.id}" onclick="selectCategory('${cat.id}')">
-                <span class="category-icon">${cat.icon}</span>
                 <span class="category-name">${cat.name}</span>
             </div>
         `;
@@ -91,7 +88,7 @@ function populateCategorySelect() {
     
     let html = '';
     for (const cat of forumCategories) {
-        html += `<option value="${cat.id}">${cat.icon} ${cat.name}</option>`;
+        html += `<option value="${cat.id}">${cat.name}</option>`;
     }
     select.innerHTML = html;
 }
@@ -120,15 +117,23 @@ async function loadPosts() {
         const res = await fetch(url);
         const data = await res.json();
         
-        if (data.success && data.posts.length > 0) {
-            list.innerHTML = data.posts.map(post => postCardHTML(post)).join('');
-            renderForumPagination(data.pagination);
+        if (data.success && data.posts && data.posts.length > 0) {
+            const validPosts = data.posts.filter(post => post && post.authorName);
+            if (validPosts.length > 0) {
+                list.innerHTML = validPosts.map(post => postCardHTML(post)).join('');
+                renderForumPagination(data.pagination);
+            } else {
+                list.innerHTML = `
+                    <div class="forum-empty">
+                        <h3>No posts found</h3>
+                        <p>Be the first to create a post!</p>
+                    </div>
+                `;
+                renderForumPagination(null);
+            }
         } else {
             list.innerHTML = `
                 <div class="forum-empty">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-                    </svg>
                     <h3>No posts found</h3>
                     <p>Be the first to create a post!</p>
                 </div>
@@ -156,6 +161,7 @@ async function initForumUser() {
     const ownerId = parts[2];
     currentPostOwnerId = ownerId;
     
+    await loadCategories();
     await loadUserPosts(ownerId);
 }
 
@@ -168,19 +174,27 @@ async function loadUserPosts(ownerId) {
         const data = await res.json();
         
         if (data.success) {
-            // Header
-            const initial = data.user.username.charAt(0).toUpperCase();
+            const initial = (data.user.username || 'U').charAt(0).toUpperCase();
             header.innerHTML = `
                 <div class="user-avatar-large">${initial}</div>
-                <h1>${data.user.username}'s Posts</h1>
-                <p class="user-stats">${data.pagination.totalPosts} posts • <a href="/user/${data.user.odilId}">View Profile</a></p>
-                <a href="/TuForums" class="btn btn-secondary" style="margin-top:16px;">← Back to Forums</a>
+                <h1>${data.user.username || 'Unknown'}'s Posts</h1>
+                <p class="user-stats">${data.pagination.totalPosts} posts | <a href="/user/${data.user.odilId}">View Profile</a></p>
+                <a href="/TuForums" class="btn btn-secondary" style="margin-top:16px;">Back to Forums</a>
             `;
             
-            // Posts
-            if (data.posts.length > 0) {
-                list.innerHTML = data.posts.map(post => postCardHTML(post)).join('');
-                renderForumPagination(data.pagination, `loadUserPostsPage`);
+            if (data.posts && data.posts.length > 0) {
+                const validPosts = data.posts.filter(post => post && post.authorName);
+                if (validPosts.length > 0) {
+                    list.innerHTML = validPosts.map(post => postCardHTML(post)).join('');
+                    renderForumPagination(data.pagination, 'loadUserPostsPage');
+                } else {
+                    list.innerHTML = `
+                        <div class="forum-empty">
+                            <h3>No posts yet</h3>
+                            <p>This user hasn't created any posts.</p>
+                        </div>
+                    `;
+                }
             } else {
                 list.innerHTML = `
                     <div class="forum-empty">
@@ -212,6 +226,7 @@ async function initForumPost() {
     currentPostOwnerId = parts[2];
     currentPostId = parts[3];
     
+    await loadCategories();
     await loadPost();
 }
 
@@ -223,77 +238,58 @@ async function loadPost() {
         const res = await fetch(`/api/forum/post/${currentPostOwnerId}/${currentPostId}`);
         const data = await res.json();
         
-        if (data.success) {
+        if (data.success && data.post) {
             const post = data.post;
-            const initial = post.authorName.charAt(0).toUpperCase();
-            const category = forumCategories.find(c => c.id === post.category) || { icon: '💬', name: 'General' };
-            const isLiked = currentUser && post.likes.includes(currentUser.odilId);
+            const authorName = post.authorName || 'Unknown';
+            const initial = authorName.charAt(0).toUpperCase();
+            const category = forumCategories.find(c => c.id === post.category) || { name: 'General' };
+            const isLiked = currentUser && post.likes && post.likes.includes(currentUser.odilId);
             const isOwner = currentUser && post.authorId === currentUser.odilId;
             
             container.innerHTML = `
-                <a href="/TuForums" class="btn btn-ghost" style="margin-bottom:16px;">← Back to Forums</a>
+                <a href="/TuForums" class="btn btn-ghost" style="margin-bottom:16px;">Back to Forums</a>
                 <div class="post-full">
                     <div class="post-full-header">
                         <div class="post-avatar">${initial}</div>
                         <div class="post-full-meta">
                             <h1 class="post-full-title">
-                                ${post.isPinned ? '<span class="pin-icon">📌</span>' : ''}
-                                ${post.isLocked ? '<span class="lock-icon">🔒</span>' : ''}
-                                ${escapeHtml(post.title)}
+                                ${post.isPinned ? '<span class="pin-icon">[Pinned]</span>' : ''}
+                                ${post.isLocked ? '<span class="lock-icon">[Locked]</span>' : ''}
+                                ${escapeHtml(post.title || 'Untitled')}
                             </h1>
                             <div class="post-full-info">
-                                <a href="/TuForums/${post.authorId}" class="post-author">${post.authorName}</a>
-                                <span>•</span>
+                                <a href="/TuForums/${post.authorId}" class="post-author">${authorName}</a>
+                                <span>|</span>
                                 <span>${timeAgo(post.createdAt)}</span>
-                                <span>•</span>
-                                <span class="post-category-badge">${category.icon} ${category.name}</span>
+                                <span>|</span>
+                                <span class="post-category-badge">${category.name}</span>
                             </div>
                         </div>
                     </div>
-                    <div class="post-full-content">${escapeHtml(post.content)}</div>
+                    <div class="post-full-content">${escapeHtml(post.content || '')}</div>
                     <div class="post-full-actions">
                         <button class="btn btn-secondary ${isLiked ? 'liked' : ''}" onclick="likePost(${post.postId})">
-                            <svg viewBox="0 0 24 24" fill="${isLiked ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2" width="18" height="18">
-                                <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
-                            </svg>
-                            <span id="like-count">${post.likes.length}</span>
+                            Like <span id="like-count">${(post.likes || []).length}</span>
                         </button>
-                        <span class="post-stat">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
-                                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
-                                <circle cx="12" cy="12" r="3"/>
-                            </svg>
-                            ${post.views} views
-                        </span>
-                        <span class="post-stat">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
-                                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-                            </svg>
-                            ${post.replies} replies
-                        </span>
+                        <span class="post-stat">${post.views || 0} views</span>
+                        <span class="post-stat">${post.replies || 0} replies</span>
                         ${isOwner ? `<button class="btn btn-danger" onclick="deletePost(${post.postId})">Delete</button>` : ''}
                     </div>
                 </div>
             `;
             
-            document.title = `TuBlox — ${post.title}`;
+            document.title = `TuBlox - ${post.title || 'Post'}`;
             
-            // Replies
-            repliesSection.style.display = 'block';
-            
-            if (post.isLocked) {
-                document.getElementById('reply-form').style.display = 'none';
+            if (repliesSection) {
+                repliesSection.style.display = 'block';
+                
+                if (post.isLocked) {
+                    const replyForm = document.getElementById('reply-form');
+                    if (replyForm) replyForm.style.display = 'none';
+                }
+                
+                renderReplies(data.replies || []);
             }
-            
-            renderReplies(data.replies);
-            
-            // Load categories for display
-            if (forumCategories.length === 0) {
-                const catRes = await fetch('/api/forum/categories');
-                const catData = await catRes.json();
-                if (catData.success) forumCategories = catData.categories;
-            }
-            
         } else {
             container.innerHTML = `
                 <div class="forum-empty">
@@ -312,31 +308,31 @@ function renderReplies(replies) {
     const list = document.getElementById('replies-list');
     if (!list) return;
     
-    if (replies.length === 0) {
+    if (!replies || replies.length === 0) {
         list.innerHTML = '<p style="color:var(--text-secondary);text-align:center;">No replies yet. Be the first!</p>';
         return;
     }
     
     list.innerHTML = replies.map(reply => {
-        const initial = reply.authorName.charAt(0).toUpperCase();
-        const isLiked = currentUser && reply.likes.includes(currentUser.odilId);
+        if (!reply) return '';
+        
+        const authorName = reply.authorName || 'Unknown';
+        const initial = authorName.charAt(0).toUpperCase();
+        const isLiked = currentUser && reply.likes && reply.likes.includes(currentUser.odilId);
         
         return `
             <div class="reply-card">
                 <div class="reply-header">
                     <div class="reply-avatar">${initial}</div>
                     <div class="post-meta">
-                        <a href="/TuForums/${reply.authorId}" class="post-author">${reply.authorName}</a>
+                        <a href="/TuForums/${reply.authorId}" class="post-author">${authorName}</a>
                         <div class="post-time">${timeAgo(reply.createdAt)}</div>
                     </div>
                 </div>
-                <div class="reply-content">${escapeHtml(reply.content)}</div>
+                <div class="reply-content">${escapeHtml(reply.content || '')}</div>
                 <div class="reply-actions">
                     <button class="btn btn-ghost ${isLiked ? 'liked' : ''}" onclick="likeReply(${reply.replyId})">
-                        <svg viewBox="0 0 24 24" fill="${isLiked ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2" width="16" height="16">
-                            <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
-                        </svg>
-                        <span>${reply.likes.length}</span>
+                        Like ${(reply.likes || []).length}
                     </button>
                 </div>
             </div>
@@ -352,21 +348,33 @@ function openNewPostModal() {
         toast('Please log in to create posts', 'error');
         return;
     }
-    document.getElementById('new-post-modal').classList.add('active');
+    const modal = document.getElementById('new-post-modal');
+    if (modal) modal.classList.add('active');
 }
 
 function closeNewPostModal() {
-    document.getElementById('new-post-modal').classList.remove('active');
-    document.getElementById('post-title').value = '';
-    document.getElementById('post-content').value = '';
-    document.getElementById('title-count').textContent = '0';
-    document.getElementById('content-count').textContent = '0';
+    const modal = document.getElementById('new-post-modal');
+    if (modal) modal.classList.remove('active');
+    
+    const titleEl = document.getElementById('post-title');
+    const contentEl = document.getElementById('post-content');
+    const titleCount = document.getElementById('title-count');
+    const contentCount = document.getElementById('content-count');
+    
+    if (titleEl) titleEl.value = '';
+    if (contentEl) contentEl.value = '';
+    if (titleCount) titleCount.textContent = '0';
+    if (contentCount) contentCount.textContent = '0';
 }
 
 async function createPost() {
-    const title = document.getElementById('post-title').value.trim();
-    const content = document.getElementById('post-content').value.trim();
-    const category = document.getElementById('post-category').value;
+    const titleEl = document.getElementById('post-title');
+    const contentEl = document.getElementById('post-content');
+    const categoryEl = document.getElementById('post-category');
+    
+    const title = titleEl ? titleEl.value.trim() : '';
+    const content = contentEl ? contentEl.value.trim() : '';
+    const category = categoryEl ? categoryEl.value : 'general';
     
     if (!title) {
         toast('Please enter a title', 'error');
@@ -392,15 +400,17 @@ async function createPost() {
             closeNewPostModal();
             location.href = data.url;
         } else {
-            toast(data.message, 'error');
+            toast(data.message || 'Error creating post', 'error');
         }
     } catch (err) {
+        console.error('Create post error:', err);
         toast('Error creating post', 'error');
     }
 }
 
 async function postReply() {
-    const content = document.getElementById('reply-content').value.trim();
+    const contentEl = document.getElementById('reply-content');
+    const content = contentEl ? contentEl.value.trim() : '';
     
     if (!content) {
         toast('Please enter a reply', 'error');
@@ -423,12 +433,13 @@ async function postReply() {
         
         if (data.success) {
             toast('Reply posted!');
-            document.getElementById('reply-content').value = '';
+            if (contentEl) contentEl.value = '';
             loadPost();
         } else {
-            toast(data.message, 'error');
+            toast(data.message || 'Error posting reply', 'error');
         }
     } catch (err) {
+        console.error('Post reply error:', err);
         toast('Error posting reply', 'error');
     }
 }
@@ -444,11 +455,11 @@ async function likePost(postId) {
         const data = await res.json();
         
         if (data.success) {
-            document.getElementById('like-count').textContent = data.likesCount;
-            const btn = event.target.closest('.btn');
-            btn.classList.toggle('liked', data.liked);
+            const likeCount = document.getElementById('like-count');
+            if (likeCount) likeCount.textContent = data.likesCount;
         }
     } catch (err) {
+        console.error('Like post error:', err);
         toast('Error', 'error');
     }
 }
@@ -467,6 +478,7 @@ async function likeReply(replyId) {
             loadPost();
         }
     } catch (err) {
+        console.error('Like reply error:', err);
         toast('Error', 'error');
     }
 }
@@ -482,9 +494,10 @@ async function deletePost(postId) {
             toast('Post deleted');
             location.href = '/TuForums';
         } else {
-            toast(data.message, 'error');
+            toast(data.message || 'Error deleting post', 'error');
         }
     } catch (err) {
+        console.error('Delete post error:', err);
         toast('Error deleting post', 'error');
     }
 }
@@ -493,45 +506,32 @@ async function deletePost(postId) {
 // Helpers
 // ============================================
 function postCardHTML(post) {
-    const initial = post.authorName.charAt(0).toUpperCase();
-    const category = forumCategories.find(c => c.id === post.category) || { icon: '💬', name: 'General' };
+    if (!post) return '';
+    
+    const authorName = post.authorName || 'Unknown';
+    const initial = authorName.charAt(0).toUpperCase();
+    const category = forumCategories.find(c => c.id === post.category) || { name: 'General' };
     
     return `
         <div class="post-card ${post.isPinned ? 'pinned' : ''}" onclick="location.href='/TuForums/${post.authorId}/${post.postId}'">
             <div class="post-card-header">
                 <div class="post-avatar">${initial}</div>
                 <div class="post-meta">
-                    <a href="/TuForums/${post.authorId}" class="post-author" onclick="event.stopPropagation()">${post.authorName}</a>
+                    <a href="/TuForums/${post.authorId}" class="post-author" onclick="event.stopPropagation()">${authorName}</a>
                     <div class="post-time">${timeAgo(post.createdAt)}</div>
                 </div>
-                <span class="post-category-badge">${category.icon} ${category.name}</span>
+                <span class="post-category-badge">${category.name}</span>
             </div>
             <div class="post-title">
-                ${post.isPinned ? '<span class="pin-icon">📌</span>' : ''}
-                ${post.isLocked ? '<span class="lock-icon">🔒</span>' : ''}
-                ${escapeHtml(post.title)}
+                ${post.isPinned ? '<span class="pin-icon">[Pinned]</span> ' : ''}
+                ${post.isLocked ? '<span class="lock-icon">[Locked]</span> ' : ''}
+                ${escapeHtml(post.title || 'Untitled')}
             </div>
-            <div class="post-preview">${escapeHtml(post.content)}</div>
+            <div class="post-preview">${escapeHtml(post.content || '')}</div>
             <div class="post-stats">
-                <span class="post-stat">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
-                    </svg>
-                    ${post.likes.length}
-                </span>
-                <span class="post-stat">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-                    </svg>
-                    ${post.replies}
-                </span>
-                <span class="post-stat">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
-                        <circle cx="12" cy="12" r="3"/>
-                    </svg>
-                    ${post.views}
-                </span>
+                <span class="post-stat">${(post.likes || []).length} likes</span>
+                <span class="post-stat">${post.replies || 0} replies</span>
+                <span class="post-stat">${post.views || 0} views</span>
             </div>
         </div>
     `;
@@ -553,7 +553,7 @@ function renderForumPagination(pagination, loadFn = 'goToForumPage') {
     
     let html = '';
     
-    html += `<button class="pagination-btn" onclick="${loadFn}(${currentPage - 1})" ${currentPage <= 1 ? 'disabled' : ''}>←</button>`;
+    html += `<button class="pagination-btn" onclick="${loadFn}(${currentPage - 1})" ${currentPage <= 1 ? 'disabled' : ''}>Prev</button>`;
     
     for (let i = 1; i <= Math.min(totalPages, 5); i++) {
         html += `<button class="pagination-btn ${i === currentPage ? 'active' : ''}" onclick="${loadFn}(${i})">${i}</button>`;
@@ -564,7 +564,7 @@ function renderForumPagination(pagination, loadFn = 'goToForumPage') {
         html += `<button class="pagination-btn" onclick="${loadFn}(${totalPages})">${totalPages}</button>`;
     }
     
-    html += `<button class="pagination-btn" onclick="${loadFn}(${currentPage + 1})" ${currentPage >= totalPages ? 'disabled' : ''}>→</button>`;
+    html += `<button class="pagination-btn" onclick="${loadFn}(${currentPage + 1})" ${currentPage >= totalPages ? 'disabled' : ''}>Next</button>`;
     
     container.innerHTML = html;
 }
@@ -576,6 +576,8 @@ function goToForumPage(page) {
 }
 
 function timeAgo(date) {
+    if (!date) return 'Unknown';
+    
     const seconds = Math.floor((new Date() - new Date(date)) / 1000);
     
     if (seconds < 60) return 'just now';
@@ -587,7 +589,8 @@ function timeAgo(date) {
 }
 
 function escapeHtml(text) {
+    if (!text) return '';
     const div = document.createElement('div');
-    div.textContent = text || '';
+    div.textContent = text;
     return div.innerHTML;
 }

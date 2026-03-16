@@ -57,6 +57,10 @@ const wss = new WebSocket.Server({
 const gameServers = new Map();
 const connectedClients = new Map();
 
+// После объявления gameServers и connectedClients
+const onlineSessions = new Map(); // odilId -> { lastActivity: timestamp }
+const SESSION_TIMEOUT = 2 * 60 * 1000; // 2 minutes
+
 const PacketType = {
     CONNECT_REQUEST: 1,
     CONNECT_RESPONSE: 2,
@@ -731,6 +735,10 @@ const authAPI = async (req, res, next) => {
         const user = await User.findById(decoded.id).select('-password');
         if (!user) { res.clearCookie('token'); return res.status(401).json({ success: false, message: 'Not authorized' }); }
         req.user = user;
+        
+        // UPDATE ONLINE SESSION
+        onlineSessions.set(user.odilId, { lastActivity: Date.now() });
+        
         next();
     } catch (err) {
         res.clearCookie('token');

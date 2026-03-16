@@ -181,7 +181,7 @@ function getUserPresence(odilId) {
         return { isOnline: false, currentGame: null };
     }
     
-    // Check all game servers
+    // 1. Check if playing game via WebSocket
     for (const [gameId, gameServer] of gameServers.entries()) {
         const playerData = gameServer.players.get(odilIdNum);
         
@@ -199,9 +199,8 @@ function getUserPresence(odilId) {
         }
     }
     
-    // Check connectedClients
+    // 2. Check connectedClients (WebSocket)
     const client = connectedClients.get(odilIdNum);
-    
     if (client && client.ws && client.ws.readyState === WebSocket.OPEN) {
         if (client.gameId) {
             return {
@@ -213,6 +212,12 @@ function getUserPresence(odilId) {
                 }
             };
         }
+        return { isOnline: true, currentGame: null };
+    }
+    
+    // 3. CHECK BROWSER SESSIONS (это было пропущено!)
+    const session = onlineSessions.get(odilIdNum);
+    if (session && (Date.now() - session.lastActivity) < SESSION_TIMEOUT) {
         return { isOnline: true, currentGame: null };
     }
     
@@ -783,30 +788,14 @@ app.get('/TuForums/:ownerId/:postId', (req, res) => res.sendFile(path.join(__dir
 app.get('/api/debug/presence/:id', async (req, res) => {
     const odilId = parseInt(req.params.id);
     
-    const connectedList = [];
-    for (const [id, c] of connectedClients.entries()) {
-        connectedList.push({
-            odilId: id,
-            type: typeof id,
-            username: c.username,
-            gameId: c.gameId,
-            wsState: c.ws ? c.ws.readyState : null
+    // List all online sessions
+    const sessions = [];
+    for (const [id, s] of onlineSessions.entries()) {
+        sessions.push({ 
+            odilId: id, 
+            lastActivity: s.lastActivity, 
+            ageSeconds: Math.floor((Date.now() - s.lastActivity) / 1000)
         });
-    }
-    
-    const gamesList = [];
-    for (const [gameId, game] of gameServers.entries()) {
-        const players = [];
-        for (const [pid, p] of game.players.entries()) {
-            players.push({
-                odilId: pid,
-                type: typeof pid,
-                username: p.username,
-                wsState: p.ws ? p.ws.readyState : null,
-                connectedAt: p.connectedAt
-            });
-        }
-        gamesList.push({ gameId, hostOdilId: game.hostOdilId, players });
     }
     
     const presence = getUserPresence(odilId);
@@ -814,11 +803,8 @@ app.get('/api/debug/presence/:id', async (req, res) => {
     
     res.json({
         requestedOdilId: odilId,
-        wssClientsCount: wss.clients.size,
-        connectedClientsCount: connectedClients.size,
-        connectedClients: connectedList,
-        gameServersCount: gameServers.size,
-        gameServers: gamesList,
+        onlineSessionsCount: onlineSessions.size,
+        onlineSessions: sessions,  // <-- ЭТО ВАЖНО
         presence,
         enrichedPresence: enriched
     });

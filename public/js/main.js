@@ -647,12 +647,10 @@ async function loadUsers() {
         if (data.success && data.users.length > 0) {
             grid.innerHTML = data.users.map(u => {
                 const statusClass = u.currentGame ? 'in-game' : (u.isOnline ? 'online' : 'offline');
-                const statusDot = `<span class="user-status-dot ${statusClass}"></span>`;
-                
                 return `
                     <div class="user-card" onclick="location.href='/user/${u.odilId}'">
                         <div class="user-avatar">
-                            ${statusDot}
+                            <span class="user-status-dot ${statusClass}"></span>
                         </div>
                         <div class="user-info">
                             <div class="user-name">${escapeHtml(u.username)}</div>
@@ -673,6 +671,8 @@ async function loadUsers() {
 // ============================================
 // Profile
 // ============================================
+
+let profileRefreshInterval = null;
 
 function formatDate(dateStr) {
     if (!dateStr) return 'Unknown';
@@ -695,155 +695,113 @@ function formatLastSeen(dateStr) {
     const diffMin = Math.floor(diffSec / 60);
     const diffHour = Math.floor(diffMin / 60);
     const diffDay = Math.floor(diffHour / 24);
-    const diffWeek = Math.floor(diffDay / 7);
-    const diffMonth = Math.floor(diffDay / 30);
     
-    if (diffSec < 60) return 'Just now';
+    if (diffSec < 30) return 'Just now';
+    if (diffMin < 1) return 'Less than a minute ago';
     if (diffMin < 60) return `${diffMin} minute${diffMin !== 1 ? 's' : ''} ago`;
     if (diffHour < 24) return `${diffHour} hour${diffHour !== 1 ? 's' : ''} ago`;
     if (diffDay < 7) return `${diffDay} day${diffDay !== 1 ? 's' : ''} ago`;
-    if (diffWeek < 5) return `${diffWeek} week${diffWeek !== 1 ? 's' : ''} ago`;
-    if (diffMonth < 12) return `${diffMonth} month${diffMonth !== 1 ? 's' : ''} ago`;
     
     return formatDate(dateStr);
 }
 
-function formatPlayDuration(startTime) {
-    if (!startTime) return '';
-    const start = new Date(startTime);
-    if (isNaN(start.getTime())) return '';
-    
-    const now = new Date();
-    const diffMs = now - start;
-    const diffMin = Math.floor(diffMs / 60000);
-    const diffHour = Math.floor(diffMin / 60);
-    
-    if (diffMin < 1) return 'Just started';
-    if (diffMin < 60) return `Playing for ${diffMin} min`;
-    if (diffHour < 24) {
-        const remainMin = diffMin % 60;
-        return remainMin > 0 
-            ? `Playing for ${diffHour}h ${remainMin}m` 
-            : `Playing for ${diffHour}h`;
-    }
-    return `Playing for ${Math.floor(diffHour / 24)}d ${diffHour % 24}h`;
-}
-
-function buildStatusBadge(user) {
-    if (user.currentGame) {
-        return `
+function buildProfileHTML(u) {
+    // Status badge
+    let statusHtml = '';
+    if (u.currentGame) {
+        statusHtml = `
             <div class="profile-status in-game">
                 <span class="status-dot"></span>
                 In Game
             </div>
         `;
-    }
-    
-    if (user.isOnline) {
-        return `
+    } else if (u.isOnline) {
+        statusHtml = `
             <div class="profile-status online">
                 <span class="status-dot"></span>
                 Online
             </div>
         `;
+    } else {
+        statusHtml = `
+            <div class="profile-status offline">
+                <span class="status-dot"></span>
+                Offline
+            </div>
+        `;
+    }
+    
+    // Last seen (only if offline)
+    let lastSeenHtml = '';
+    if (!u.isOnline && u.lastSeen) {
+        lastSeenHtml = `
+            <div class="profile-last-seen">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="10"/>
+                    <polyline points="12 6 12 12 16 14"/>
+                </svg>
+                Last seen ${formatLastSeen(u.lastSeen)}
+            </div>
+        `;
+    }
+    
+    // Currently playing card
+    let playingHtml = '';
+    if (u.currentGame) {
+        const game = u.currentGame;
+        playingHtml = `
+            <div class="profile-playing">
+                <div class="profile-playing-thumb">
+                    ${game.thumbnail 
+                        ? `<img src="${escapeHtml(game.thumbnail)}" alt="${escapeHtml(game.title || 'Game')}">` 
+                        : `<div class="placeholder-icon">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                                <rect x="2" y="6" width="20" height="12" rx="2"/>
+                                <path d="M6 12h4M8 10v4M14 10l4 4M14 14l4-4"/>
+                            </svg>
+                        </div>`
+                    }
+                </div>
+                <div class="profile-playing-info">
+                    <div class="profile-playing-label">
+                        <span class="playing-dot"></span>
+                        Currently Playing
+                    </div>
+                    <div class="profile-playing-name">${escapeHtml(game.title || 'Unknown Game')}</div>
+                </div>
+                <div class="profile-playing-join">
+                    <button class="btn btn-blue btn-sm" onclick="joinPlayerGame('${escapeHtml(game.gameId || game.serverId || '')}')">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;">
+                            <polygon points="5 3 19 12 5 21 5 3"/>
+                        </svg>
+                        Join
+                    </button>
+                </div>
+            </div>
+        `;
     }
     
     return `
-        <div class="profile-status offline">
-            <span class="status-dot"></span>
-            Offline
+        <div class="profile-header">
+            <div class="profile-avatar"></div>
+            <h1 class="profile-name">${escapeHtml(u.username)}</h1>
+            <div class="profile-id">#${u.odilId}</div>
+            ${statusHtml}
+            ${lastSeenHtml}
         </div>
-    `;
-}
-
-function buildLastSeen(user) {
-    if (user.isOnline || user.currentGame) return '';
-    if (!user.lastSeen) return '';
-    
-    return `
-        <div class="profile-last-seen">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <circle cx="12" cy="12" r="10"/>
-                <polyline points="12 6 12 12 16 14"/>
-            </svg>
-            Last seen ${formatLastSeen(user.lastSeen)}
-        </div>
-    `;
-}
-
-function buildCurrentlyPlaying(user) {
-    if (!user.currentGame) return '';
-    
-    const game = user.currentGame;
-    const gamePlaceholder = `
-        <div class="placeholder-icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                <rect x="2" y="6" width="20" height="12" rx="2"/>
-                <path d="M6 12h4M8 10v4M14 10l4 4M14 14l4-4"/>
-            </svg>
-        </div>
-    `;
-    
-    const duration = formatPlayDuration(game.joinedAt || game.startedAt);
-    
-    return `
-        <div class="profile-playing">
-            <div class="profile-playing-thumb">
-                ${game.thumbnail 
-                    ? `<img src="${escapeHtml(game.thumbnail)}" alt="${escapeHtml(game.title || 'Game')}">` 
-                    : gamePlaceholder}
-            </div>
-            <div class="profile-playing-info">
-                <div class="profile-playing-label">
-                    <span class="playing-dot"></span>
-                    Currently Playing
-                </div>
-                <div class="profile-playing-name">${escapeHtml(game.title || 'Unknown Game')}</div>
-                ${duration ? `<div class="profile-playing-meta">${duration}</div>` : ''}
-            </div>
-            <div class="profile-playing-join">
-                <a href="/game/${escapeHtml(game.id || game.gameId || '')}" class="btn btn-blue btn-sm" onclick="event.preventDefault(); joinPlayerServer('${escapeHtml(game.serverId || game.id || game.gameId || '')}', '${escapeHtml(game.id || game.gameId || '')}')">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;">
-                        <polygon points="5 3 19 12 5 21 5 3"/>
-                    </svg>
-                    Join
-                </a>
-            </div>
-        </div>
-    `;
-}
-
-function buildJoinedDate(user) {
-    const date = user.createdAt || user.joinedAt || user.registeredAt;
-    if (!date) return '';
-    
-    return `
+        
+        ${playingHtml}
+        
         <div class="profile-joined">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
                 <line x1="16" y1="2" x2="16" y2="6"/>
                 <line x1="8" y1="2" x2="8" y2="6"/>
                 <line x1="3" y1="10" x2="21" y2="10"/>
             </svg>
-            Joined ${formatDate(date)}
+            Joined ${formatDate(u.createdAt)}
         </div>
     `;
-}
-
-function joinPlayerServer(serverId, gameId) {
-    if (!currentUser) {
-        toast('Please log in to play', 'error');
-        setTimeout(() => { location.href = '/'; }, 1000);
-        return;
-    }
-    
-    if (serverId && serverId !== 'undefined' && serverId !== '') {
-        playGame(serverId);
-    } else if (gameId && gameId !== 'undefined' && gameId !== '') {
-        playGame(gameId);
-    } else {
-        toast('Cannot join this server', 'error');
-    }
 }
 
 async function loadProfile() {
@@ -852,6 +810,7 @@ async function loadProfile() {
     
     const id = location.pathname.split('/').pop();
     
+    // Show loading
     content.innerHTML = `
         <div class="loading-placeholder large">
             <div class="spinner"></div>
@@ -863,59 +822,21 @@ async function loadProfile() {
         const data = await res.json();
         
         if (data.success) {
-            const u = data.user;
-            
-            const statusBadge = buildStatusBadge(u);
-            const lastSeen = buildLastSeen(u);
-            const currentlyPlaying = buildCurrentlyPlaying(u);
-            const joinedDate = buildJoinedDate(u);
-            
-            content.innerHTML = `
-                <div class="profile-header">
-                    <div class="profile-avatar"></div>
-                    <h1 class="profile-name">${escapeHtml(u.username)}</h1>
-                    <div class="profile-id">#${u.odilId}</div>
-                    ${statusBadge}
-                    ${lastSeen}
-                </div>
-                
-                ${currentlyPlaying}
-           
-                
-                ${joinedDate}
-            `;
-            
-            document.title = `TuBlox — ${u.username}`;
-            
-            // Start auto-refresh if user is online or in-game
-            if (u.isOnline || u.currentGame) {
-                startProfileRefresh(id);
-            }
+            content.innerHTML = buildProfileHTML(data.user);
+            startProfileRefresh(id);
         } else {
             content.innerHTML = `
                 <div class="profile-not-found">
                     <h2>User not found</h2>
-                    <p>This player doesn't exist or the profile is unavailable.</p>
+                    <p>This player doesn't exist.</p>
                     <a href="/users" class="btn btn-secondary">Browse Players</a>
                 </div>
             `;
         }
     } catch (e) {
-        console.error('Profile load error:', e);
-        content.innerHTML = `
-            <div class="profile-not-found">
-                <h2>Error Loading Profile</h2>
-                <p>Something went wrong. Please try again.</p>
-                <button class="btn btn-secondary" onclick="loadProfile()">Retry</button>
-            </div>
-        `;
+        content.innerHTML = '<p class="error">Error loading profile</p>';
     }
 }
-
-// ============================================
-// Profile Auto-Refresh (for live status)
-// ============================================
-let profileRefreshInterval = null;
 
 function startProfileRefresh(userId) {
     stopProfileRefresh();
@@ -925,60 +846,108 @@ function startProfileRefresh(userId) {
             const res = await fetch(`/api/user/${userId}`);
             const data = await res.json();
             
-            if (!data.success) {
-                stopProfileRefresh();
-                return;
-            }
+            if (!data.success) return;
             
             const u = data.user;
             
             // Update status badge
-            const statusContainer = document.querySelector('.profile-header .profile-status');
-            if (statusContainer) {
-                const newBadge = buildStatusBadge(u);
-                const wrapper = document.createElement('div');
-                wrapper.innerHTML = newBadge;
-                const newEl = wrapper.firstElementChild;
-                statusContainer.replaceWith(newEl);
+            const statusEl = document.querySelector('.profile-status');
+            if (statusEl) {
+                let newClass = 'profile-status';
+                let newContent = '';
+                
+                if (u.currentGame) {
+                    newClass += ' in-game';
+                    newContent = '<span class="status-dot"></span>In Game';
+                } else if (u.isOnline) {
+                    newClass += ' online';
+                    newContent = '<span class="status-dot"></span>Online';
+                } else {
+                    newClass += ' offline';
+                    newContent = '<span class="status-dot"></span>Offline';
+                }
+                
+                statusEl.className = newClass;
+                statusEl.innerHTML = newContent;
             }
             
             // Update last seen
             const lastSeenEl = document.querySelector('.profile-last-seen');
-            const newLastSeen = buildLastSeen(u);
-            if (newLastSeen && lastSeenEl) {
-                const wrapper = document.createElement('div');
-                wrapper.innerHTML = newLastSeen;
-                lastSeenEl.replaceWith(wrapper.firstElementChild);
-            } else if (newLastSeen && !lastSeenEl) {
-                const header = document.querySelector('.profile-header');
-                if (header) header.insertAdjacentHTML('beforeend', newLastSeen);
-            } else if (!newLastSeen && lastSeenEl) {
+            if (!u.isOnline && u.lastSeen) {
+                const newHtml = `
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="10"/>
+                        <polyline points="12 6 12 12 16 14"/>
+                    </svg>
+                    Last seen ${formatLastSeen(u.lastSeen)}
+                `;
+                if (lastSeenEl) {
+                    lastSeenEl.innerHTML = newHtml;
+                } else {
+                    const header = document.querySelector('.profile-header');
+                    if (header) {
+                        const div = document.createElement('div');
+                        div.className = 'profile-last-seen';
+                        div.innerHTML = newHtml;
+                        header.appendChild(div);
+                    }
+                }
+            } else if (lastSeenEl) {
                 lastSeenEl.remove();
             }
             
-            // Update currently playing
+            // Update playing card
             const playingEl = document.querySelector('.profile-playing');
-            const newPlaying = buildCurrentlyPlaying(u);
-            if (newPlaying && playingEl) {
-                const wrapper = document.createElement('div');
-                wrapper.innerHTML = newPlaying;
-                playingEl.replaceWith(wrapper.firstElementChild);
-            } else if (newPlaying && !playingEl) {
-                const header = document.querySelector('.profile-header');
-                if (header) header.insertAdjacentHTML('afterend', newPlaying);
-            } else if (!newPlaying && playingEl) {
+            if (u.currentGame) {
+                const game = u.currentGame;
+                const playingHtml = `
+                    <div class="profile-playing-thumb">
+                        ${game.thumbnail 
+                            ? `<img src="${escapeHtml(game.thumbnail)}" alt="${escapeHtml(game.title || 'Game')}">` 
+                            : `<div class="placeholder-icon">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                                    <rect x="2" y="6" width="20" height="12" rx="2"/>
+                                    <path d="M6 12h4M8 10v4M14 10l4 4M14 14l4-4"/>
+                                </svg>
+                            </div>`
+                        }
+                    </div>
+                    <div class="profile-playing-info">
+                        <div class="profile-playing-label">
+                            <span class="playing-dot"></span>
+                            Currently Playing
+                        </div>
+                        <div class="profile-playing-name">${escapeHtml(game.title || 'Unknown Game')}</div>
+                    </div>
+                    <div class="profile-playing-join">
+                        <button class="btn btn-blue btn-sm" onclick="joinPlayerGame('${escapeHtml(game.gameId || game.serverId || '')}')">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;">
+                                <polygon points="5 3 19 12 5 21 5 3"/>
+                            </svg>
+                            Join
+                        </button>
+                    </div>
+                `;
+                
+                if (playingEl) {
+                    playingEl.innerHTML = playingHtml;
+                } else {
+                    const header = document.querySelector('.profile-header');
+                    if (header) {
+                        const div = document.createElement('div');
+                        div.className = 'profile-playing';
+                        div.innerHTML = playingHtml;
+                        header.insertAdjacentElement('afterend', div);
+                    }
+                }
+            } else if (playingEl) {
                 playingEl.remove();
             }
             
-            // Stop refreshing if user went offline and not in game
-            if (!u.isOnline && !u.currentGame) {
-                stopProfileRefresh();
-            }
-            
         } catch (e) {
-            console.warn('Profile refresh failed:', e);
+            // ignore refresh errors
         }
-    }, 15000); // Refresh every 15 seconds
+    }, 5000); // Refresh every 5 seconds
 }
 
 function stopProfileRefresh() {
@@ -986,6 +955,14 @@ function stopProfileRefresh() {
         clearInterval(profileRefreshInterval);
         profileRefreshInterval = null;
     }
+}
+
+function joinPlayerGame(gameId) {
+    if (!gameId) {
+        toast('Cannot join this game', 'error');
+        return;
+    }
+    playGame(gameId);
 }
 
 // ============================================
@@ -1003,44 +980,38 @@ function formatNumber(n) {
 
 let heartbeatInterval = null;
 
+async function sendHeartbeat() {
+    try {
+        await fetch('/api/heartbeat', { method: 'POST' });
+    } catch (e) {
+        // ignore
+    }
+}
+
 function startHeartbeat() {
     if (heartbeatInterval) return;
     
     // Send immediately
-    fetch('/api/heartbeat', { method: 'POST' }).catch(() => {});
+    sendHeartbeat();
     
-    // Then every 30 seconds
-    heartbeatInterval = setInterval(() => {
-        fetch('/api/heartbeat', { method: 'POST' }).catch(() => {});
-    }, 30000);
+    // Then every 20 seconds
+    heartbeatInterval = setInterval(sendHeartbeat, 20000);
 }
 
-// Start heartbeat on any page where user is logged in
-document.addEventListener('DOMContentLoaded', () => {
-    // Check if user is logged in (has auth pages or protected pages)
-    const isProtectedPage = document.querySelector('.home-page') || 
-                           document.querySelector('.games-page') || 
-                           document.querySelector('.game-page') ||
-                           document.querySelector('.users-page') ||
-                           document.querySelector('.profile-page') ||
-                           document.querySelector('.forum-page');
-    
-    if (isProtectedPage) {
-        startHeartbeat();
-    }
-});
-
-// Cleanup
-window.addEventListener('beforeunload', () => {
+function stopHeartbeat() {
     if (heartbeatInterval) {
         clearInterval(heartbeatInterval);
+        heartbeatInterval = null;
     }
-});
+}
 
 // ============================================
 // Init
 // ============================================
 document.addEventListener('DOMContentLoaded', () => {
+    // Start heartbeat on any page
+    startHeartbeat();
+    
     if (document.querySelector('.auth-tabs')) {
         initTabs();
         document.getElementById('register-form')?.addEventListener('submit', register);
@@ -1090,8 +1061,16 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 });
 
-// Cleanup on page leave
+// Visibility change - send heartbeat when user returns
+document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) {
+        sendHeartbeat();
+    }
+});
+
+// Cleanup on page unload
 window.addEventListener('beforeunload', () => {
+    stopHeartbeat();
     stopProfileRefresh();
 });
 
@@ -1107,5 +1086,5 @@ window.closePlayModal = closePlayModal;
 window.retryLaunch = retryLaunch;
 window.loadGameServers = loadGameServers;
 window.logout = logout;
-window.joinPlayerServer = joinPlayerServer;
+window.joinPlayerGame = joinPlayerGame;
 window.loadProfile = loadProfile;

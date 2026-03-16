@@ -1977,6 +1977,174 @@ a {
 }
 
 /* ============================================
+   FOOTER
+   ============================================ */
+
+.site-footer {
+    margin-top: 80px;
+    border-top: 1px solid var(--border);
+    background: var(--bg-card);
+}
+
+.footer-inner {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 24px;
+}
+
+/* Footer CTA (Whitelist) */
+.footer-cta {
+    display: flex;
+    justify-content: center;
+    padding: 32px 0;
+    border-bottom: 1px solid var(--border);
+}
+
+.footer-cta .btn {
+    padding: 14px 32px;
+    font-size: 15px;
+    font-weight: 600;
+}
+
+/* Footer Main */
+.footer-main {
+    display: flex;
+    justify-content: space-between;
+    gap: 48px;
+    padding: 40px 0;
+}
+
+.footer-brand {
+    flex-shrink: 0;
+}
+
+.footer-brand .logo {
+    margin-bottom: 12px;
+}
+
+.footer-brand .logo img {
+    width: 36px;
+    height: 36px;
+}
+
+.footer-brand .logo span {
+    font-size: 20px;
+}
+
+.footer-copyright {
+    font-size: 13px;
+    color: var(--gray);
+}
+
+.footer-links {
+    display: flex;
+    gap: 64px;
+}
+
+.footer-column h4 {
+    font-family: 'Sora', sans-serif;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--white);
+    margin-bottom: 16px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.footer-column ul {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.footer-column li a {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+    color: var(--gray);
+    transition: color var(--transition);
+}
+
+.footer-column li a:hover {
+    color: var(--white);
+}
+
+.footer-icon {
+    width: 16px;
+    height: 16px;
+    flex-shrink: 0;
+}
+
+/* Footer Bottom */
+.footer-bottom {
+    padding: 20px 0;
+    border-top: 1px solid var(--border);
+    text-align: center;
+}
+
+.footer-bottom p {
+    font-size: 13px;
+    color: var(--gray-dark);
+}
+
+/* Footer Responsive */
+@media (max-width: 768px) {
+    .footer-cta .btn {
+        width: 100%;
+        max-width: 280px;
+    }
+    
+    .footer-main {
+        flex-direction: column;
+        gap: 32px;
+    }
+    
+    .footer-links {
+        gap: 40px;
+    }
+    
+    .footer-brand {
+        text-align: center;
+    }
+    
+    .footer-brand .logo {
+        justify-content: center;
+    }
+}
+
+@media (max-width: 480px) {
+    .footer-inner {
+        padding: 0 20px;
+    }
+    
+    .footer-cta {
+        padding: 24px 0;
+    }
+    
+    .footer-links {
+        flex-direction: column;
+        gap: 28px;
+    }
+    
+    .footer-column {
+        text-align: center;
+    }
+    
+    .footer-column ul {
+        align-items: center;
+    }
+    
+    .site-footer {
+        margin-top: 48px;
+    }
+    
+    .footer-main {
+        padding: 32px 0;
+    }
+}
+/* ============================================
    RESPONSIVE
    ============================================ */
 

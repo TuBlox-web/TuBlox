@@ -1,0 +1,503 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TuBlox — Whitelist</title>
+    <link rel="stylesheet" href="/css/style.css">
+    <link rel="icon" href="/assets/logo.svg">
+    <style>
+        /* Whitelist styles inline чтобы избежать проблем */
+        .whitelist-page {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .whitelist-bg {
+            position: absolute;
+            inset: 0;
+            z-index: 0;
+        }
+
+        .whitelist-bg img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            object-position: center;
+        }
+
+        .whitelist-overlay {
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(
+                to bottom,
+                rgba(0, 0, 0, 0.7) 0%,
+                rgba(0, 0, 0, 0.85) 50%,
+                rgba(0, 0, 0, 0.95) 100%
+            );
+        }
+
+        .whitelist-content {
+            position: relative;
+            z-index: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 40px 24px;
+            max-width: 500px;
+            width: 100%;
+        }
+
+        .whitelist-content .logo {
+            margin-bottom: 32px;
+        }
+
+        .whitelist-content .logo img {
+            width: 48px;
+            height: 48px;
+        }
+
+        .whitelist-content .logo span {
+            font-size: 26px;
+        }
+
+        .whitelist-counter {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin-bottom: 32px;
+            padding: 20px 40px;
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 16px;
+            backdrop-filter: blur(10px);
+        }
+
+        .counter-value {
+            font-family: 'Sora', sans-serif;
+            font-size: 48px;
+            font-weight: 700;
+            color: #fff;
+            line-height: 1;
+        }
+
+        .counter-label {
+            font-size: 14px;
+            color: #888;
+            margin-top: 8px;
+        }
+
+        .whitelist-card {
+            width: 100%;
+            padding: 40px 32px;
+            background: rgba(10, 10, 10, 0.8);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 20px;
+            backdrop-filter: blur(20px);
+            text-align: center;
+        }
+
+        .whitelist-card h1 {
+            font-family: 'Sora', sans-serif;
+            font-size: 28px;
+            font-weight: 700;
+            margin-bottom: 12px;
+            color: #fff;
+        }
+
+        .whitelist-card > p {
+            font-size: 15px;
+            color: #888;
+            margin-bottom: 32px;
+            line-height: 1.6;
+        }
+
+        #whitelist-status {
+            min-height: 120px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .whitelist-state {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 16px;
+            width: 100%;
+        }
+
+        .whitelist-state p {
+            color: #888;
+            font-size: 14px;
+        }
+
+        .whitelist-btn {
+            padding: 16px 48px;
+            font-size: 16px;
+            border-radius: 14px;
+            gap: 10px;
+            background: #fff;
+            color: #000;
+            border: none;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-family: 'General Sans', sans-serif;
+            font-weight: 500;
+            transition: all 0.2s ease;
+        }
+
+        .whitelist-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 24px rgba(255, 255, 255, 0.15);
+        }
+
+        .whitelist-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .whitelist-note {
+            font-size: 13px !important;
+            color: #555 !important;
+        }
+
+        .status-icon {
+            width: 64px;
+            height: 64px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 8px;
+        }
+
+        .status-icon svg {
+            width: 32px;
+            height: 32px;
+        }
+
+        .status-icon.pending {
+            background: rgba(251, 191, 36, 0.15);
+            border: 2px solid rgba(251, 191, 36, 0.3);
+        }
+
+        .status-icon.pending svg {
+            stroke: #fbbf24;
+        }
+
+        .status-icon.approved {
+            background: rgba(34, 197, 94, 0.15);
+            border: 2px solid rgba(34, 197, 94, 0.3);
+        }
+
+        .status-icon.approved svg {
+            stroke: #22c55e;
+        }
+
+        .whitelist-state h3 {
+            font-family: 'Sora', sans-serif;
+            font-size: 20px;
+            font-weight: 600;
+            color: #fff;
+        }
+
+        .whitelist-info {
+            display: flex;
+            gap: 32px;
+            margin-top: 40px;
+        }
+
+        .info-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 13px;
+            color: #888;
+        }
+
+        .info-item svg {
+            width: 18px;
+            height: 18px;
+            stroke: #888;
+        }
+
+        .spinner {
+            width: 24px;
+            height: 24px;
+            border: 2px solid #333;
+            border-top-color: #fff;
+            border-radius: 50%;
+            animation: spin 0.6s linear infinite;
+        }
+
+        .loader {
+            width: 18px;
+            height: 18px;
+            border: 2px solid #333;
+            border-top-color: #000;
+            border-radius: 50%;
+            animation: spin 0.5s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .toast-container {
+            position: fixed;
+            bottom: 28px;
+            right: 28px;
+            z-index: 1000;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .toast {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 16px 20px;
+            font-size: 14px;
+            background: #0a0a0a;
+            border: 1px solid #1a1a1a;
+            border-radius: 12px;
+            color: #fff;
+        }
+
+        .toast.success { border-color: #22c55e; }
+        .toast.error { border-color: #ff3333; }
+
+        @media (max-width: 640px) {
+            .whitelist-content {
+                padding: 32px 20px;
+            }
+            
+            .whitelist-card {
+                padding: 32px 24px;
+            }
+            
+            .whitelist-card h1 {
+                font-size: 24px;
+            }
+            
+            .counter-value {
+                font-size: 40px;
+            }
+            
+            .whitelist-info {
+                flex-direction: column;
+                gap: 16px;
+                align-items: center;
+            }
+            
+            .whitelist-btn {
+                width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="whitelist-page">
+        <!-- Background Preview -->
+        <div class="whitelist-bg">
+            <img src="/assets/images/Preview.png" alt="TuBlox Preview">
+            <div class="whitelist-overlay"></div>
+        </div>
+        
+        <!-- Content -->
+        <div class="whitelist-content">
+            <!-- Logo -->
+            <a href="/" class="logo">
+                <img src="/assets/logo.svg" alt="TuBlox">
+                <span>TuBlox</span>
+            </a>
+            
+            <!-- Counter -->
+            <div class="whitelist-counter">
+                <span class="counter-value" id="whitelist-count">0</span>
+                <span class="counter-label">Players Whitelisted</span>
+            </div>
+            
+            <!-- Main Card -->
+            <div class="whitelist-card">
+                <h1>Whitelist</h1>
+                
+                <!-- Status -->
+                <div id="whitelist-status">
+                    <!-- Loading -->
+                    <div class="whitelist-state" id="status-loading">
+                        <div class="spinner"></div>
+                    </div>
+                    
+                    <!-- Not logged in -->
+                    <div class="whitelist-state" id="status-login" style="display:none;">
+                        <p>Sign in to request whitelist access</p>
+                        <a href="/auth" class="whitelist-btn">Sign In</a>
+                    </div>
+                    
+                    <!-- Can request -->
+                    <div class="whitelist-state" id="status-request" style="display:none;">
+                        <button class="whitelist-btn" id="request-btn" onclick="requestWhitelist()">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:20px;height:20px;">
+                                <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+                                <circle cx="8.5" cy="7" r="4"/>
+                                <line x1="20" y1="8" x2="20" y2="14"/>
+                                <line x1="23" y1="11" x2="17" y2="11"/>
+                            </svg>
+                            Whitelist
+                        </button>
+                    </div>
+                    
+                    <!-- Pending -->
+                    <div class="whitelist-state" id="status-pending" style="display:none;">
+                        <div class="status-icon pending">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <circle cx="12" cy="12" r="10"/>
+                                <polyline points="12 6 12 12 16 14"/>
+                            </svg>
+                        </div>
+                        <h3>Whitelist</h3>
+                    </div>
+                    
+                    <!-- Approved -->
+                    <div class="whitelist-state" id="status-approved" style="display:none;">
+                        <div class="status-icon approved">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+                                <polyline points="22 4 12 14.01 9 11.01"/>
+                            </svg>
+                        </div>
+                        <h3>You're Whitelisted</h3>
+                    </div>
+                </div>
+            </div>
+            
+       
+    
+    <div class="toast-container"></div>
+    
+    <script>
+        // Toast
+        function toast(msg, type = 'success') {
+            let c = document.querySelector('.toast-container');
+            const el = document.createElement('div');
+            el.className = `toast ${type}`;
+            el.innerHTML = `<span>${msg}</span>`;
+            c.appendChild(el);
+            setTimeout(() => { el.style.opacity = '0'; setTimeout(() => el.remove(), 200); }, 3000);
+        }
+
+        // Load on page ready
+        document.addEventListener('DOMContentLoaded', async () => {
+            loadWhitelistCount();
+            await checkUserStatus();
+        });
+        
+        async function loadWhitelistCount() {
+            try {
+                const res = await fetch('/api/whitelist/count');
+                const data = await res.json();
+                if (data.success) {
+                    animateCounter(data.count);
+                }
+            } catch (e) {
+                console.error('Failed to load count');
+            }
+        }
+        
+        function animateCounter(target) {
+            const el = document.getElementById('whitelist-count');
+            const duration = 1500;
+            const startTime = performance.now();
+            
+            function update(currentTime) {
+                const elapsed = currentTime - startTime;
+                const progress = Math.min(elapsed / duration, 1);
+                const eased = 1 - Math.pow(1 - progress, 3);
+                const current = Math.floor(target * eased);
+                el.textContent = current.toLocaleString();
+                
+                if (progress < 1) {
+                    requestAnimationFrame(update);
+                }
+            }
+            
+            requestAnimationFrame(update);
+        }
+        
+        async function checkUserStatus() {
+            document.getElementById('status-loading').style.display = 'flex';
+            
+            try {
+                const res = await fetch('/api/user');
+                const data = await res.json();
+                
+                document.getElementById('status-loading').style.display = 'none';
+                
+                if (!data.success) {
+                    document.getElementById('status-login').style.display = 'flex';
+                    return;
+                }
+                
+                // Check whitelist
+                const wlRes = await fetch('/api/whitelist/me');
+                const wlData = await wlRes.json();
+                
+                if (wlData.whitelisted) {
+                    document.getElementById('status-approved').style.display = 'flex';
+                } else if (wlData.pending) {
+                    document.getElementById('status-pending').style.display = 'flex';
+                } else {
+                    document.getElementById('status-request').style.display = 'flex';
+                }
+                
+            } catch (e) {
+                document.getElementById('status-loading').style.display = 'none';
+                document.getElementById('status-login').style.display = 'flex';
+            }
+        }
+        
+        async function requestWhitelist() {
+            const btn = document.getElementById('request-btn');
+            const originalHTML = btn.innerHTML;
+            btn.innerHTML = '<div class="loader"></div>';
+            btn.disabled = true;
+            
+            try {
+                const res = await fetch('/api/whitelist/request', { method: 'POST' });
+                const data = await res.json();
+                
+                if (data.success) {
+                    document.getElementById('status-request').style.display = 'none';
+                    
+                    if (data.autoApproved) {
+                        document.getElementById('status-approved').style.display = 'flex';
+                        toast('Welcome to TuBlox!');
+                        loadWhitelistCount();
+                    } else {
+                        document.getElementById('status-pending').style.display = 'flex';
+                        toast('Request submitted!');
+                    }
+                } else {
+                    toast(data.message || 'Error', 'error');
+                    btn.innerHTML = originalHTML;
+                    btn.disabled = false;
+                }
+            } catch (e) {
+                toast('Connection error', 'error');
+                btn.innerHTML = originalHTML;
+                btn.disabled = false;
+            }
+        }
+    </script>
+</body>
+</html>

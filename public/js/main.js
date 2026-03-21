@@ -62,25 +62,9 @@ function formatDate(dateStr) {
     if (!dateStr) return 'Unknown';
     var d = new Date(dateStr);
     if (isNaN(d.getTime())) return 'Unknown';
-    var months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+    var months = ['January', 'February', 'March', 'April', 'May', 'June',
+        'July', 'August', 'September', 'October', 'November', 'December'];
     return months[d.getMonth()] + ' ' + d.getDate() + ', ' + d.getFullYear();
-}
-
-function formatLastSeen(dateStr) {
-    if (!dateStr) return 'Unknown';
-    var d = new Date(dateStr);
-    if (isNaN(d.getTime())) return 'Unknown';
-    var now = new Date();
-    var diffSec = Math.floor((now - d) / 1000);
-    var diffMin = Math.floor(diffSec / 60);
-    var diffHour = Math.floor(diffMin / 60);
-    var diffDay = Math.floor(diffHour / 24);
-    if (diffSec < 30) return 'Just now';
-    if (diffMin < 1) return 'Less than a minute ago';
-    if (diffMin < 60) return diffMin + ' minute' + (diffMin !== 1 ? 's' : '') + ' ago';
-    if (diffHour < 24) return diffHour + ' hour' + (diffHour !== 1 ? 's' : '') + ' ago';
-    if (diffDay < 7) return diffDay + ' day' + (diffDay !== 1 ? 's' : '') + ' ago';
-    return formatDate(dateStr);
 }
 
 function gamePlaceholder() {
@@ -168,8 +152,12 @@ async function loadUser() {
         var data = await res.json();
         if (data.success) {
             currentUser = data.user;
-            document.querySelectorAll('.username').forEach(function (el) { el.textContent = data.user.username; });
-            document.querySelectorAll('.odil-id').forEach(function (el) { el.textContent = '#' + data.user.odilId; });
+            document.querySelectorAll('.username').forEach(function (el) {
+                el.textContent = data.user.username;
+            });
+            document.querySelectorAll('.odil-id').forEach(function (el) {
+                el.textContent = '#' + data.user.odilId;
+            });
             var level = document.getElementById('user-level');
             var coins = document.getElementById('user-coins');
             var time = document.getElementById('user-playtime');
@@ -238,7 +226,9 @@ async function loadAllGames() {
         var res = await fetch('/api/games');
         var data = await res.json();
         if (data.success && data.games.length > 0) {
-            container.innerHTML = data.games.map(function (g) { return gameCardHTML(g, true); }).join('');
+            container.innerHTML = data.games.map(function (g) {
+                return gameCardHTML(g, true);
+            }).join('');
         } else {
             container.innerHTML = '<p class="no-content">No games available</p>';
         }
@@ -303,12 +293,19 @@ function playGame(gameId) {
 }
 
 function setLaunchState(state) {
-    document.querySelectorAll('.launch-state').forEach(function (el) { el.classList.remove('active'); });
+    document.querySelectorAll('.launch-state').forEach(function (el) {
+        el.classList.remove('active');
+    });
     var el = document.getElementById('state-' + state);
     if (el) el.classList.add('active');
     var title = document.getElementById('modal-title');
     if (title) {
-        var titles = { connecting: 'Launching Game', success: 'Game Started', notfound: 'Install Required', error: 'Launch Failed' };
+        var titles = {
+            connecting: 'Launching Game',
+            success: 'Game Started',
+            notfound: 'Install Required',
+            error: 'Launch Failed'
+        };
         title.textContent = titles[state] || 'Launching Game';
     }
 }
@@ -536,7 +533,10 @@ async function loadUsers() {
                 var statusClass = u.currentGame ? 'in-game' : (u.isOnline ? 'online' : 'offline');
                 return '<div class="user-card" onclick="location.href=\'/user/' + u.odilId + '\'">' +
                     '<div class="user-avatar"><span class="user-status-dot ' + statusClass + '"></span></div>' +
-                    '<div class="user-info"><div class="user-name">' + escapeHtml(u.username) + '</div><div class="user-id">#' + u.odilId + '</div></div>' +
+                    '<div class="user-info">' +
+                        '<div class="user-name">' + escapeHtml(u.username) + '</div>' +
+                        '<div class="user-id">#' + u.odilId + '</div>' +
+                    '</div>' +
                     '<div class="user-level">Lv.' + u.gameData.level + '</div>' +
                 '</div>';
             }).join('');
@@ -547,6 +547,10 @@ async function loadUsers() {
         grid.innerHTML = '<p class="no-content">Error loading</p>';
     }
 }
+
+// ============================================
+// PROFILE
+// ============================================
 
 function buildProfileHTML(u) {
     var statusClass = u.currentGame ? 'in-game' : (u.isOnline ? 'online' : 'offline');
@@ -571,7 +575,7 @@ function buildProfileHTML(u) {
         badgesHtml = '<div class="profile-avatar-badges">' + badgeItems + '</div>';
     }
 
-    // Playing card
+    // Currently playing card
     var playingHtml = '';
     if (u.currentGame) {
         var game = u.currentGame;
@@ -594,7 +598,7 @@ function buildProfileHTML(u) {
             '</div>';
     }
 
-    // Last seen value
+    // Last seen in info card
     var lastSeenValue;
     if (u.isOnline || u.currentGame) {
         lastSeenValue =
@@ -608,14 +612,12 @@ function buildProfileHTML(u) {
             '</span>';
     }
 
-    // Frame 1 — Avatar
+    // Frame 1 — Avatar with name on top
     var frame1 =
         '<div class="profile-avatar-frame">' +
             '<div class="profile-frame-top">' +
-                '<div>' +
-                    '<div class="profile-name">' + escapeHtml(u.username) + '</div>' +
-                    '<div class="profile-id">#' + u.odilId + '</div>' +
-                '</div>' +
+                '<div class="profile-name">' + escapeHtml(u.username) + '</div>' +
+                '<div class="profile-id">#' + u.odilId + '</div>' +
             '</div>' +
             '<div class="profile-avatar" id="profile-avatar-container"></div>' +
             '<div class="profile-frame-bottom">' +
@@ -624,7 +626,7 @@ function buildProfileHTML(u) {
             '</div>' +
         '</div>';
 
-    // Frame 2 — Info
+    // Frame 2 — Info card
     var frame2 =
         '<div class="profile-info-card">' +
             '<div class="profile-info-header">' +
@@ -665,7 +667,12 @@ async function loadProfile() {
             content.innerHTML = buildProfileHTML(data.user);
             startProfileRefresh(id);
         } else {
-            content.innerHTML = '<div class="profile-not-found"><h2>User not found</h2><p>This player doesn\'t exist.</p><a href="/users" class="btn btn-secondary">Browse Players</a></div>';
+            content.innerHTML =
+                '<div class="profile-not-found">' +
+                    '<h2>User not found</h2>' +
+                    '<p>This player doesn\'t exist.</p>' +
+                    '<a href="/users" class="btn btn-secondary">Browse Players</a>' +
+                '</div>';
         }
     } catch (err) {
         content.innerHTML = '<p class="error">Error loading profile</p>';
@@ -681,37 +688,50 @@ function startProfileRefresh(userId) {
             if (!data.success) return;
             var u = data.user;
 
-            // Update status
-            var statusEl = document.querySelector('.profile-status');
+            // Update status pill
+            var statusEl = document.querySelector('.profile-frame-bottom .profile-status');
             if (statusEl) {
-                var cls = 'profile-status';
-                var inner = '';
+                var cls, text;
                 if (u.currentGame) {
-                    cls += ' in-game';
-                    inner = '<span class="status-dot"></span>In Game';
+                    cls = 'profile-status in-game';
+                    text = 'In Game';
                 } else if (u.isOnline) {
-                    cls += ' online';
-                    inner = '<span class="status-dot"></span>Online';
+                    cls = 'profile-status online';
+                    text = 'Online';
                 } else {
-                    cls += ' offline';
-                    inner = '<span class="status-dot"></span>Offline';
+                    cls = 'profile-status offline';
+                    text = 'Offline';
                 }
                 statusEl.className = cls;
-                statusEl.innerHTML = inner;
+                statusEl.innerHTML = '<span class="status-dot"></span>' + text;
             }
 
+            // Update last seen row
+            var lastSeenRow = document.getElementById('profile-lastseen-row');
+            if (lastSeenRow) {
+                var lsVal;
+                if (u.isOnline || u.currentGame) {
+                    lsVal = '<span class="profile-info-value online"><span class="status-dot-sm"></span>Online</span>';
+                } else {
+                    lsVal = '<span class="profile-info-value offline"><span class="status-dot-sm"></span>Offline</span>';
+                }
+                var labelEl = lastSeenRow.querySelector('.profile-info-label');
+                if (labelEl) {
+                    var labelClone = labelEl.cloneNode(true);
+                    lastSeenRow.innerHTML = '';
+                    lastSeenRow.appendChild(labelClone);
+                    lastSeenRow.insertAdjacentHTML('beforeend', lsVal);
+                }
+            }
 
-
-            // Update playing
+            // Update playing card
             var playingEl = document.querySelector('.profile-playing');
             if (u.currentGame) {
                 var game = u.currentGame;
-                var thumbContent;
-                if (game.thumbnail) {
-                    thumbContent = '<img src="' + escapeHtml(game.thumbnail) + '" alt="' + escapeHtml(game.title || 'Game') + '">';
-                } else {
-                    thumbContent = '<div class="placeholder-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 12h4M8 10v4M14 10l4 4M14 14l4-4"/></svg></div>';
-                }
+                var thumbContent = game.thumbnail
+                    ? '<img src="' + escapeHtml(game.thumbnail) + '" alt="' + escapeHtml(game.title || 'Game') + '">'
+                    : '<div class="placeholder-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 12h4M8 10v4M14 10l4 4M14 14l4-4"/></svg></div>';
+
                 var ph =
                     '<div class="profile-playing-thumb">' + thumbContent + '</div>' +
                     '<div class="profile-playing-info">' +
@@ -727,12 +747,12 @@ function startProfileRefresh(userId) {
                 if (playingEl) {
                     playingEl.innerHTML = ph;
                 } else {
-                    var frame = document.querySelector('.profile-avatar-frame');
-                    if (frame) {
+                    var frame1 = document.querySelector('.profile-avatar-frame');
+                    if (frame1) {
                         var d = document.createElement('div');
                         d.className = 'profile-playing';
                         d.innerHTML = ph;
-                        frame.insertAdjacentElement('afterend', d);
+                        frame1.insertAdjacentElement('afterend', d);
                     }
                 }
             } else if (playingEl) {
@@ -819,6 +839,10 @@ function createFooter() {
     document.body.appendChild(footer);
 }
 
+// ============================================
+// INIT
+// ============================================
+
 document.addEventListener('DOMContentLoaded', function () {
     startHeartbeat();
     createFooter();
@@ -874,9 +898,6 @@ document.addEventListener('DOMContentLoaded', function () {
             if (modal) modal.classList.remove('active');
         };
     });
-
-    var disconnectBtn = document.getElementById('hud-disconnect');
-    if (disconnectBtn) disconnectBtn.addEventListener('click', disconnectGame);
 });
 
 document.addEventListener('visibilitychange', function () {
@@ -888,6 +909,7 @@ window.addEventListener('beforeunload', function () {
     stopProfileRefresh();
 });
 
+// Globals
 window.playGame = playGame;
 window.shareGame = shareGame;
 window.openServersModal = openServersModal;

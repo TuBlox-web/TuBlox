@@ -94,7 +94,6 @@ a {
 .logo img {
     width: 42px;
     height: 42px;
-    filter: brightness(0) invert(1);
     transition: transform var(--transition);
 }
 

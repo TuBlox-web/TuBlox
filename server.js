@@ -1,4 +1,4 @@
-// server.js - TuBlox с серверным AntiCheat v1.0
+// server.js - TuBlox с серверным AntiCheat v1.0 (FIXED)
 
 require('dotenv').config();
 const express = require('express');
@@ -22,98 +22,76 @@ const server = http.createServer(app);
 class ServerAntiCheat {
     constructor() {
         this.config = {
-            // Movement
             maxWalkSpeed: 8.0,
             maxSprintSpeed: 14.0,
             maxSwimSpeed: 6.0,
             maxFallSpeed: 60.0,
             maxJumpVelocity: 12.0,
-            
-            // Fly detection
             maxAirTime: 3.0,
             maxHoverTime: 1.5,
             minFallSpeed: 0.5,
-            
-            // Teleport
             maxTeleportDistance: 20.0,
-            
-            // Rate limits
             maxPacketsPerSecond: 60,
             maxStateUpdatesPerSecond: 35,
             maxChatMessagesPerMinute: 30,
             maxConnectionsPerIP: 5,
-            
-            // Thresholds
             warnThreshold: 15,
             kickThreshold: 40,
             banThreshold: 80,
-            
-            // Decay
             scoreDecayPerSecond: 0.3,
-            
-            // Timing
             minUpdateInterval: 15,
             maxUpdateInterval: 5000,
             gracePeriod: 5000,
-            
-            // Physics
             gravity: 20.0
         };
-        
+
         this.players = new Map();
         this.ipConnections = new Map();
         this.bannedIPs = new Set();
         this.bannedOdilIds = new Set();
         this.chatCounts = new Map();
-        
-        // Callbacks
+
         this.onKick = null;
         this.onBan = null;
         this.onWarn = null;
         this.onCorrectPosition = null;
-        
-        // Admin list (odilIds that bypass checks)
-        this.adminIds = new Set([1]); // Add your admin IDs here
-        
+
+        this.adminIds = new Set([1]);
+
         this.startDecayTimer();
         console.log('[AntiCheat] Server AntiCheat v1.0 initialized');
     }
-    
+
     log(msg) {
         console.log(`[AC] ${msg}`);
     }
-    
-    // ═══════════════════════════════════════════════════════════════
-    // PLAYER MANAGEMENT
-    // ═══════════════════════════════════════════════════════════════
-    
+
     registerPlayer(odilId, username, ip, spawnPosition) {
         if (this.bannedOdilIds.has(odilId)) {
             this.log(`BLOCKED: Banned player #${odilId}`);
             return { allowed: false, reason: 'You are banned from this server' };
         }
-        
+
         if (this.bannedIPs.has(ip)) {
             this.log(`BLOCKED: Banned IP ${ip}`);
             return { allowed: false, reason: 'Your IP is banned' };
         }
-        
-        // IP connection limit
+
         if (!this.ipConnections.has(ip)) {
             this.ipConnections.set(ip, new Set());
         }
         const ipConns = this.ipConnections.get(ip);
-        
+
         if (ipConns.size >= this.config.maxConnectionsPerIP && !this.adminIds.has(odilId)) {
             this.log(`BLOCKED: Too many connections from ${ip}`);
             return { allowed: false, reason: 'Too many connections from your IP' };
         }
-        
+
         ipConns.add(odilId);
-        
+
         const now = Date.now();
         const isAdmin = this.adminIds.has(odilId);
-        
+
         this.players.set(odilId, {
             odilId,
             username,
@@ -140,11 +118,11 @@ class ServerAntiCheat {
             isFrozen: false,
             isAdmin
         });
-        
+
         this.log(`Registered: ${username} (#${odilId}) from ${ip}${isAdmin ? ' [ADMIN]' : ''}`);
         return { allowed: true };
     }
-    
+
     unregisterPlayer(odilId) {
         const player = this.players.get(odilId);
         if (player) {
@@ -157,18 +135,13 @@ class ServerAntiCheat {
             this.players.delete(odilId);
         }
     }
-    
-    // ═══════════════════════════════════════════════════════════════
-    // RATE LIMITING
-    // ═══════════════════════════════════════════════════════════════
-    
+
     checkPacketRate(odilId, isStatePacket = false) {
         const player = this.players.get(odilId);
         if (!player || player.isAdmin) return { allowed: true };
-        
+
         const now = Date.now();
-        
-        // Reset counters
+
         if (now - player.packetResetTime > 1000) {
             player.packetsThisSecond = 0;
             player.packetResetTime = now;
@@ -177,91 +150,82 @@ class ServerAntiCheat {
             player.statesThisSecond = 0;
             player.stateResetTime = now;
         }
-        
+
         player.packetsThisSecond++;
         if (isStatePacket) player.statesThisSecond++;
-        
+
         if (player.packetsThisSecond > this.config.maxPacketsPerSecond) {
             this.addViolation(odilId, 'packet', 5, 'Packet spam');
             return { allowed: false, reason: 'Rate limited' };
         }
-        
+
         if (isStatePacket && player.statesThisSecond > this.config.maxStateUpdatesPerSecond) {
             return { allowed: false, reason: 'State rate limited' };
         }
-        
+
         return { allowed: true };
     }
-    
+
     checkChatRate(odilId) {
         const player = this.players.get(odilId);
         if (!player) return { allowed: false };
         if (player.isAdmin) return { allowed: true };
-        
+
         const now = Date.now();
         if (!this.chatCounts.has(odilId)) {
             this.chatCounts.set(odilId, { count: 0, resetTime: now });
         }
-        
+
         const chat = this.chatCounts.get(odilId);
         if (now - chat.resetTime > 60000) {
             chat.count = 0;
             chat.resetTime = now;
         }
-        
+
         chat.count++;
         if (chat.count > this.config.maxChatMessagesPerMinute) {
             this.addViolation(odilId, 'packet', 3, 'Chat spam');
             return { allowed: false, reason: 'Chat rate limited' };
         }
-        
+
         return { allowed: true };
     }
-    
-    // ═══════════════════════════════════════════════════════════════
-    // MAIN VALIDATION
-    // ═══════════════════════════════════════════════════════════════
-    
+
     validatePlayerState(odilId, data) {
         const player = this.players.get(odilId);
         if (!player) return { valid: false, action: 'kick', reason: 'Unknown player' };
-        
-        // Admin bypass
+
         if (player.isAdmin) {
             this.updatePlayerState(player, data);
             return { valid: true };
         }
-        
+
         const now = Date.now();
         const deltaTime = Math.min((now - player.lastUpdateTime) / 1000, 1.0);
-        
-        // Grace period
+
         if (now < player.graceUntil) {
             this.updatePlayerState(player, data);
             return { valid: true };
         }
-        
-        // Frozen
+
         if (player.isFrozen) {
-            return { 
-                valid: false, 
-                action: 'rollback', 
+            return {
+                valid: false,
+                action: 'rollback',
                 reason: 'You are frozen',
-                correctedPosition: player.lastValidPosition 
+                correctedPosition: player.lastValidPosition
             };
         }
-        
-        // Validate data
+
         const dataCheck = this.validateData(data);
         if (!dataCheck.valid) {
             this.addViolation(odilId, 'invalid', 15, dataCheck.reason);
             return { valid: false, action: 'rollback', reason: dataCheck.reason, correctedPosition: player.lastValidPosition };
         }
-        
+
         const newPos = { x: data.posX, y: data.posY, z: data.posZ };
         const newVel = { x: data.velX || 0, y: data.velY || 0, z: data.velZ || 0 };
-        
-        // === TELEPORT CHECK ===
+
         const teleport = this.checkTeleport(player, newPos, deltaTime);
         if (!teleport.valid) {
             this.addViolation(odilId, 'teleport', teleport.severity, teleport.reason);
@@ -269,8 +233,7 @@ class ServerAntiCheat {
                 return { valid: false, action: 'rollback', reason: teleport.reason, correctedPosition: player.lastValidPosition };
             }
         }
-        
-        // === SPEED CHECK ===
+
         const speed = this.checkSpeed(player, newPos, deltaTime, data);
         if (!speed.valid) {
             this.addViolation(odilId, 'speed', speed.severity, speed.reason);
@@ -278,8 +241,7 @@ class ServerAntiCheat {
                 return { valid: false, action: 'rollback', reason: speed.reason, correctedPosition: player.lastValidPosition };
             }
         }
-        
-        // === FLY CHECK ===
+
         const fly = this.checkFly(player, newPos, newVel, deltaTime, data);
         if (!fly.valid) {
             this.addViolation(odilId, 'fly', fly.severity, fly.reason);
@@ -287,17 +249,15 @@ class ServerAntiCheat {
                 return { valid: false, action: 'rollback', reason: fly.reason, correctedPosition: player.lastValidPosition };
             }
         }
-        
-        // Update state
+
         this.updatePlayerState(player, data);
-        
-        // Check thresholds
+
         const action = this.checkThresholds(odilId);
         if (action) return { valid: false, action: action.type, reason: action.reason };
-        
+
         return { valid: true };
     }
-    
+
     validateData(data) {
         const fields = ['posX', 'posY', 'posZ', 'velX', 'velY', 'velZ'];
         for (const f of fields) {
@@ -305,153 +265,139 @@ class ServerAntiCheat {
                 return { valid: false, reason: `Invalid ${f}` };
             }
         }
-        
+
         if (Math.abs(data.posX) > 50000 || Math.abs(data.posY) > 50000 || Math.abs(data.posZ) > 50000) {
             return { valid: false, reason: 'Position out of bounds' };
         }
-        
+
         if (data.posY < -500) {
             return { valid: false, reason: 'Below world' };
         }
-        
+
         return { valid: true };
     }
-    
+
     checkTeleport(player, newPos, dt) {
         const dx = newPos.x - player.position.x;
         const dy = newPos.y - player.position.y;
         const dz = newPos.z - player.position.z;
-        const dist = Math.sqrt(dx*dx + dy*dy + dz*dz);
-        
+        const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+
         if (dist > this.config.maxTeleportDistance) {
             return { valid: false, severity: 20, reason: `Teleport: ${dist.toFixed(1)} blocks` };
         }
-        
+
         const maxDist = (player.isSprinting ? this.config.maxSprintSpeed : this.config.maxWalkSpeed) * dt * 2.5 + 3;
         if (dist > maxDist && dt < 0.5) {
-            return { valid: false, severity: 8, reason: `Speed anomaly: ${(dist/dt).toFixed(1)} b/s` };
+            return { valid: false, severity: 8, reason: `Speed anomaly: ${(dist / dt).toFixed(1)} b/s` };
         }
-        
+
         return { valid: true };
     }
-    
+
     checkSpeed(player, newPos, dt, data) {
         if (dt <= 0.01) return { valid: true };
-        
+
         const dx = newPos.x - player.position.x;
         const dz = newPos.z - player.position.z;
-        const hDist = Math.sqrt(dx*dx + dz*dz);
+        const hDist = Math.sqrt(dx * dx + dz * dz);
         const hSpeed = hDist / dt;
-        
+
         let maxSpeed = this.config.maxWalkSpeed;
         if (data.isSprinting) maxSpeed = this.config.maxSprintSpeed;
         if (data.isInWater) maxSpeed = this.config.maxSwimSpeed;
-        maxSpeed *= 1.4; // Tolerance
-        
+        maxSpeed *= 1.4;
+
         if (hSpeed > maxSpeed * 2.5) {
             return { valid: false, severity: 15, reason: `Speed hack: ${hSpeed.toFixed(1)} b/s` };
         }
-        
+
         if (hSpeed > maxSpeed) {
             return { valid: false, severity: 4, reason: `Speed: ${hSpeed.toFixed(1)} b/s` };
         }
-        
+
         return { valid: true };
     }
-    
+
     checkFly(player, newPos, newVel, dt, data) {
         if (data.isInWater) {
             player.airTime = 0;
             player.hoverTime = 0;
             return { valid: true };
         }
-        
+
         if (data.isGrounded) {
             player.airTime = 0;
             player.hoverTime = 0;
             player.lastGroundedTime = Date.now();
             return { valid: true };
         }
-        
-        // In air
+
         player.airTime += dt;
-        
-        // Hover detection
+
         if (Math.abs(newVel.y) < 0.3 && player.airTime > 0.5) {
             player.hoverTime += dt;
         } else {
             player.hoverTime = Math.max(0, player.hoverTime - dt * 2);
         }
-        
-        // Flying up without jump
+
         if (newVel.y > this.config.maxJumpVelocity * 1.2 && !data.isJumping && player.airTime > 0.3) {
             return { valid: false, severity: 12, reason: `Fly up: velY=${newVel.y.toFixed(1)}` };
         }
-        
-        // Not falling after time in air
+
         if (player.airTime > 1.2 && newVel.y > -this.config.minFallSpeed && !data.isJumping) {
             return { valid: false, severity: 10, reason: `Not falling: velY=${newVel.y.toFixed(1)}` };
         }
-        
-        // Hover too long
+
         if (player.hoverTime > this.config.maxHoverTime) {
             return { valid: false, severity: 15, reason: `Hover: ${player.hoverTime.toFixed(1)}s` };
         }
-        
-        // In air too long
+
         if (player.airTime > this.config.maxAirTime) {
             return { valid: false, severity: 20, reason: `Fly: ${player.airTime.toFixed(1)}s in air` };
         }
-        
+
         return { valid: true };
     }
-    
-    // ═══════════════════════════════════════════════════════════════
-    // VIOLATIONS
-    // ═══════════════════════════════════════════════════════════════
-    
+
     addViolation(odilId, type, severity, reason) {
         const player = this.players.get(odilId);
         if (!player) return;
-        
+
         player.violationScore += severity;
         player.violations[type] = (player.violations[type] || 0) + 1;
-        
+
         this.log(`VIOLATION: ${player.username} (#${odilId}) - ${type}: ${reason} [+${severity}] (Total: ${player.violationScore.toFixed(1)})`);
-        
+
         if (this.onWarn && severity >= 5) {
             this.onWarn(odilId, `[AntiCheat] ${reason}`);
         }
     }
-    
+
     checkThresholds(odilId) {
         const player = this.players.get(odilId);
         if (!player) return null;
-        
+
         if (player.violationScore >= this.config.banThreshold) {
             this.banPlayer(odilId, 'Too many violations - auto ban');
             return { type: 'ban', reason: 'Banned by AntiCheat' };
         }
-        
+
         if (player.violationScore >= this.config.kickThreshold) {
             this.kickPlayer(odilId, 'Too many violations');
             return { type: 'kick', reason: 'Kicked by AntiCheat' };
         }
-        
+
         return null;
     }
-    
-    // ═══════════════════════════════════════════════════════════════
-    // ACTIONS
-    // ═══════════════════════════════════════════════════════════════
-    
+
     kickPlayer(odilId, reason) {
         const player = this.players.get(odilId);
         if (!player) return;
         this.log(`KICK: ${player.username} (#${odilId}) - ${reason}`);
         if (this.onKick) this.onKick(odilId, reason);
     }
-    
+
     banPlayer(odilId, reason) {
         const player = this.players.get(odilId);
         if (!player) return;
@@ -460,7 +406,7 @@ class ServerAntiCheat {
         this.bannedIPs.add(player.ip);
         if (this.onBan) this.onBan(odilId, reason, player.ip);
     }
-    
+
     freezePlayer(odilId, freeze) {
         const player = this.players.get(odilId);
         if (player) {
@@ -468,7 +414,7 @@ class ServerAntiCheat {
             this.log(`${freeze ? 'FREEZE' : 'UNFREEZE'}: ${player.username} (#${odilId})`);
         }
     }
-    
+
     setAdmin(odilId, isAdmin) {
         if (isAdmin) {
             this.adminIds.add(odilId);
@@ -478,7 +424,7 @@ class ServerAntiCheat {
         const player = this.players.get(odilId);
         if (player) player.isAdmin = isAdmin;
     }
-    
+
     resetPlayer(odilId) {
         const player = this.players.get(odilId);
         if (player) {
@@ -490,7 +436,7 @@ class ServerAntiCheat {
             this.log(`RESET: ${player.username} (#${odilId})`);
         }
     }
-    
+
     grantGrace(odilId, duration = null) {
         const player = this.players.get(odilId);
         if (player) {
@@ -499,7 +445,7 @@ class ServerAntiCheat {
             player.hoverTime = 0;
         }
     }
-    
+
     updatePlayerState(player, data) {
         player.lastValidPosition = { ...player.position };
         player.position = { x: data.posX, y: data.posY, z: data.posZ };
@@ -510,7 +456,7 @@ class ServerAntiCheat {
         player.isInWater = !!data.isInWater;
         player.lastUpdateTime = Date.now();
     }
-    
+
     startDecayTimer() {
         setInterval(() => {
             this.players.forEach(player => {
@@ -520,7 +466,7 @@ class ServerAntiCheat {
             });
         }, 1000);
     }
-    
+
     getStats(odilId) {
         const player = this.players.get(odilId);
         if (!player) return null;
@@ -533,7 +479,7 @@ class ServerAntiCheat {
             isAdmin: player.isAdmin
         };
     }
-    
+
     getServerStats() {
         return {
             players: this.players.size,
@@ -541,19 +487,18 @@ class ServerAntiCheat {
             bannedOdilIds: this.bannedOdilIds.size
         };
     }
-    
+
     unbanIP(ip) {
         this.bannedIPs.delete(ip);
         this.log(`UNBAN IP: ${ip}`);
     }
-    
+
     unbanPlayer(odilId) {
         this.bannedOdilIds.delete(odilId);
         this.log(`UNBAN: #${odilId}`);
     }
 }
 
-// Create global instance
 const antiCheat = new ServerAntiCheat();
 
 // ═══════════════════════════════════════════════════════════════
@@ -563,11 +508,12 @@ const antiCheat = new ServerAntiCheat();
 const SELF_URL = process.env.RENDER_EXTERNAL_URL || process.env.SELF_URL;
 
 if (SELF_URL) {
+    const https = require('https');
+    const httpModule = require('http');
+
     setInterval(() => {
-        const https = require('https');
-        const httpModule = require('http');
         const client = SELF_URL.startsWith('https') ? https : httpModule;
-        
+
         client.get(SELF_URL + '/api/health', (res) => {
             console.log('[KeepAlive] Ping sent, status:', res.statusCode);
         }).on('error', (err) => {
@@ -577,8 +523,8 @@ if (SELF_URL) {
 }
 
 app.get('/api/health', (req, res) => {
-    res.json({ 
-        status: 'ok', 
+    res.json({
+        status: 'ok',
         uptime: process.uptime(),
         games: gameServers.size,
         connections: connectedClients.size,
@@ -591,7 +537,7 @@ app.get('/api/health', (req, res) => {
 // WEBSOCKET SERVER
 // ═══════════════════════════════════════════════════════════════
 
-const wss = new WebSocket.Server({ 
+const wss = new WebSocket.Server({
     server,
     path: '/ws'
 });
@@ -620,7 +566,6 @@ const PacketType = {
     HOST_ASSIGN: 50,
     BUILD_DATA: 51,
     SERVER_INFO: 52,
-    // AntiCheat packets
     AC_WARN: 60,
     AC_KICK: 61,
     AC_CORRECT: 62
@@ -645,7 +590,7 @@ function broadcastToGame(gameId, data, excludeOdilId = null) {
 
     const message = typeof data === 'string' ? data : JSON.stringify(data);
     let sentCount = 0;
-    
+
     game.players.forEach((player, odilId) => {
         if (excludeOdilId !== null && odilId === excludeOdilId) return;
         if (player.ws && player.ws.readyState === WebSocket.OPEN) {
@@ -657,7 +602,7 @@ function broadcastToGame(gameId, data, excludeOdilId = null) {
             }
         }
     });
-    
+
     return sentCount;
 }
 
@@ -682,10 +627,9 @@ function removePlayerFromGame(gameId, odilId) {
     if (!player) return;
 
     console.log(`[WS] Removing player ${player.username} (#${odilId}) from ${gameId}`);
-    
-    // Unregister from AntiCheat
+
     antiCheat.unregisterPlayer(odilId);
-    
+
     game.players.delete(odilId);
     connectedClients.delete(odilId);
 
@@ -725,7 +669,6 @@ antiCheat.onWarn = (odilId, reason) => {
             type: PacketType.AC_WARN,
             message: reason
         });
-        // Also send as chat message
         sendToClient(client.ws, {
             type: PacketType.CHAT_MESSAGE,
             odilId: 0,
@@ -789,48 +732,36 @@ antiCheat.onCorrectPosition = (odilId, position) => {
 
 function getUserPresence(odilId) {
     const odilIdNum = typeof odilId === 'string' ? parseInt(odilId, 10) : odilId;
-    
+
     if (isNaN(odilIdNum)) {
         return { isOnline: false, currentGame: null };
     }
-    
-    for (const [gameId, gameServer] of gameServers.entries()) {
-        const playerData = gameServer.players.get(odilIdNum);
-        
-        if (playerData && playerData.ws && playerData.ws.readyState === WebSocket.OPEN) {
-            return {
-                isOnline: true,
-                currentGame: {
-                    gameId: gameId,
-                    serverId: gameId,
-                    joinedAt: playerData.connectedAt 
-                        ? new Date(playerData.connectedAt).toISOString() 
-                        : new Date().toISOString()
-                }
-            };
-        }
-    }
-    
+
+    // Fast path: check connectedClients first (O(1))
     const client = connectedClients.get(odilIdNum);
     if (client && client.ws && client.ws.readyState === WebSocket.OPEN) {
         if (client.gameId) {
+            const game = gameServers.get(client.gameId);
+            const playerData = game ? game.players.get(odilIdNum) : null;
             return {
                 isOnline: true,
                 currentGame: {
                     gameId: client.gameId,
                     serverId: client.gameId,
-                    joinedAt: new Date().toISOString()
+                    joinedAt: playerData && playerData.connectedAt
+                        ? new Date(playerData.connectedAt).toISOString()
+                        : new Date().toISOString()
                 }
             };
         }
         return { isOnline: true, currentGame: null };
     }
-    
+
     const session = onlineSessions.get(odilIdNum);
     if (session && (Date.now() - session.lastActivity) < SESSION_TIMEOUT) {
         return { isOnline: true, currentGame: null };
     }
-    
+
     return { isOnline: false, currentGame: null };
 }
 
@@ -838,12 +769,12 @@ async function enrichPresenceWithGameInfo(presence) {
     if (!presence.currentGame || !presence.currentGame.gameId) {
         return presence;
     }
-    
+
     try {
         const game = await Game.findOne({ id: presence.currentGame.gameId })
             .select('title thumbnail id')
             .lean();
-        
+
         if (game) {
             presence.currentGame.id = game.id;
             presence.currentGame.title = game.title || game.id;
@@ -858,7 +789,7 @@ async function enrichPresenceWithGameInfo(presence) {
         presence.currentGame.title = presence.currentGame.gameId;
         presence.currentGame.thumbnail = '';
     }
-    
+
     return presence;
 }
 
@@ -869,7 +800,7 @@ async function enrichPresenceWithGameInfo(presence) {
 wss.on('connection', (ws, req) => {
     const clientIP = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.socket.remoteAddress;
     console.log(`[WS] New connection from ${clientIP}`);
-    
+
     let clientOdilId = null;
     let clientGameId = null;
     let clientUsername = null;
@@ -881,35 +812,33 @@ wss.on('connection', (ws, req) => {
     ws.on('message', async (message) => {
         try {
             const raw = message.toString();
-            
-            // Anti-flood: check message size
+
             if (raw.length > 10000) {
                 console.log(`[WS] Message too large from ${clientIP}: ${raw.length} bytes`);
                 ws.close(1009, 'Message too large');
                 return;
             }
-            
+
             const data = JSON.parse(raw);
-            
-            // Rate limiting (except for connect)
+
             if (data.type !== PacketType.CONNECT_REQUEST && clientOdilId) {
                 const rateCheck = antiCheat.checkPacketRate(clientOdilId, data.type === PacketType.PLAYER_STATE);
                 if (!rateCheck.allowed) {
-                    return; // Silently drop
+                    return;
                 }
             }
-            
+
             switch (data.type) {
                 case PacketType.CONNECT_REQUEST: {
                     console.log(`[WS] CONNECT_REQUEST from ${clientIP}:`, JSON.stringify(data));
-                    
+
                     if (data.odilId === undefined || data.odilId === null) {
                         sendToClient(ws, { type: PacketType.CONNECT_RESPONSE, success: false, message: 'Invalid odilId' });
                         return;
                     }
-                    
+
                     const parsedOdilId = typeof data.odilId === 'string' ? parseInt(data.odilId, 10) : Number(data.odilId);
-                    
+
                     if (isNaN(parsedOdilId) || parsedOdilId <= 0) {
                         sendToClient(ws, { type: PacketType.CONNECT_RESPONSE, success: false, message: 'Invalid odilId' });
                         return;
@@ -918,22 +847,20 @@ wss.on('connection', (ws, req) => {
                     clientOdilId = parsedOdilId;
                     clientGameId = data.gameId || 'baseplate';
                     clientUsername = (data.username || `Player${clientOdilId}`).substring(0, 32);
-                    
+
                     const spawnPosition = { x: 0, y: 5, z: 0 };
-                    
-                    // === ANTICHEAT REGISTRATION ===
+
                     const acResult = antiCheat.registerPlayer(clientOdilId, clientUsername, clientIP, spawnPosition);
                     if (!acResult.allowed) {
-                        sendToClient(ws, { 
-                            type: PacketType.CONNECT_RESPONSE, 
-                            success: false, 
-                            message: acResult.reason 
+                        sendToClient(ws, {
+                            type: PacketType.CONNECT_RESPONSE,
+                            success: false,
+                            message: acResult.reason
                         });
                         ws.close(1000, acResult.reason);
                         return;
                     }
 
-                    // Disconnect existing
                     const existingClient = connectedClients.get(clientOdilId);
                     if (existingClient && existingClient.ws !== ws) {
                         console.log(`[WS] Closing existing connection for #${clientOdilId}`);
@@ -946,7 +873,7 @@ wss.on('connection', (ws, req) => {
                     }
 
                     const game = getOrCreateGameServer(clientGameId);
-                    
+
                     let isHost = false;
                     if (game.hostOdilId === null || game.players.size === 0) {
                         game.hostOdilId = clientOdilId;
@@ -992,7 +919,7 @@ wss.on('connection', (ws, req) => {
                         gameId: clientGameId,
                         username: clientUsername
                     });
-                    
+
                     isConnected = true;
 
                     console.log(`[WS] ✓ ${clientUsername} (#${clientOdilId}) joined ${clientGameId}`);
@@ -1019,7 +946,7 @@ wss.on('connection', (ws, req) => {
 
                     setTimeout(() => {
                         if (ws.readyState !== WebSocket.OPEN) return;
-                        
+
                         for (const player of existingPlayers) {
                             sendToClient(ws, {
                                 type: PacketType.PLAYER_JOIN,
@@ -1030,7 +957,7 @@ wss.on('connection', (ws, req) => {
                                 posZ: player.position.z
                             });
                         }
-                        
+
                         setTimeout(() => {
                             broadcastToGame(clientGameId, {
                                 type: PacketType.PLAYER_JOIN,
@@ -1042,25 +969,23 @@ wss.on('connection', (ws, req) => {
                             }, clientOdilId);
                         }, 100);
                     }, 200);
-                    
+
                     break;
                 }
 
                 case PacketType.PLAYER_STATE: {
                     if (!clientGameId || !clientOdilId || !isConnected) break;
-                    
+
                     const game = gameServers.get(clientGameId);
                     if (!game) break;
-                    
+
                     const player = game.players.get(clientOdilId);
                     if (!player) break;
 
-                    // === ANTICHEAT VALIDATION ===
                     const validation = antiCheat.validatePlayerState(clientOdilId, data);
-                    
+
                     if (!validation.valid) {
                         if (validation.action === 'rollback' && validation.correctedPosition) {
-                            // Send correction to client
                             sendToClient(ws, {
                                 type: PacketType.AC_CORRECT,
                                 posX: validation.correctedPosition.x,
@@ -1068,20 +993,17 @@ wss.on('connection', (ws, req) => {
                                 posZ: validation.correctedPosition.z,
                                 reason: validation.reason
                             });
-                            
-                            // Use corrected position for broadcast
+
                             data.posX = validation.correctedPosition.x;
                             data.posY = validation.correctedPosition.y;
                             data.posZ = validation.correctedPosition.z;
                         } else if (validation.action === 'kick' || validation.action === 'ban') {
-                            // Already handled by callbacks
                             break;
                         } else if (validation.action === 'ignore') {
                             break;
                         }
                     }
 
-                    // Update server-side state
                     player.position = {
                         x: typeof data.posX === 'number' && isFinite(data.posX) ? data.posX : player.position.x,
                         y: typeof data.posY === 'number' && isFinite(data.posY) ? data.posY : player.position.y,
@@ -1104,7 +1026,6 @@ wss.on('connection', (ws, req) => {
                     player.isInWater = !!data.isInWater;
                     player.lastUpdate = Date.now();
 
-                    // Broadcast to other players
                     broadcastToGame(clientGameId, {
                         type: PacketType.PLAYER_STATE,
                         odilId: clientOdilId,
@@ -1128,8 +1049,7 @@ wss.on('connection', (ws, req) => {
 
                 case PacketType.CHAT_MESSAGE: {
                     if (!clientGameId || !clientOdilId || !isConnected) break;
-                    
-                    // === CHAT RATE LIMIT ===
+
                     const chatCheck = antiCheat.checkChatRate(clientOdilId);
                     if (!chatCheck.allowed) {
                         sendToClient(ws, {
@@ -1140,13 +1060,12 @@ wss.on('connection', (ws, req) => {
                         });
                         break;
                     }
-                    
+
                     const chatMsg = (data.message || '').trim();
                     if (!chatMsg || chatMsg.length > 256) break;
-                    
-                    // Filter bad content (basic)
+
                     const filtered = chatMsg.replace(/[<>]/g, '');
-                    
+
                     broadcastToGame(clientGameId, {
                         type: PacketType.CHAT_MESSAGE,
                         odilId: clientOdilId,
@@ -1200,7 +1119,6 @@ const pingInterval = setInterval(() => {
 
 wss.on('close', () => clearInterval(pingInterval));
 
-// Cleanup inactive players
 setInterval(() => {
     const now = Date.now();
     gameServers.forEach((game, gameId) => {
@@ -1214,8 +1132,7 @@ setInterval(() => {
             removePlayerFromGame(gameId, odilId);
         });
     });
-    
-    // Cleanup old sessions
+
     for (const [odilId, session] of onlineSessions.entries()) {
         if (now - session.lastActivity > SESSION_TIMEOUT) {
             onlineSessions.delete(odilId);
@@ -1314,6 +1231,8 @@ const forumPostSchema = new mongoose.Schema({
     createdAt: { type: Date, default: Date.now },
     updatedAt: { type: Date, default: Date.now }
 });
+forumPostSchema.index({ authorId: 1, createdAt: -1 });
+forumPostSchema.index({ category: 1, isPinned: -1, createdAt: -1 });
 const ForumPost = mongoose.model('ForumPost', forumPostSchema);
 
 const forumReplySchema = new mongoose.Schema({
@@ -1325,18 +1244,31 @@ const forumReplySchema = new mongoose.Schema({
     likes: [{ type: Number }],
     createdAt: { type: Date, default: Date.now }
 });
+forumReplySchema.index({ postId: 1, createdAt: 1 });
 const ForumReply = mongoose.model('ForumReply', forumReplySchema);
 
-// Ban schema for persistence
 const banSchema = new mongoose.Schema({
     odilId: { type: Number },
     ip: { type: String },
     reason: { type: String },
     bannedBy: { type: Number },
     bannedAt: { type: Date, default: Date.now },
-    expiresAt: { type: Date, default: null } // null = permanent
+    expiresAt: { type: Date, default: null }
 });
 const Ban = mongoose.model('Ban', banSchema);
+
+const whitelistSchema = new mongoose.Schema({
+    odilId: { type: Number, unique: true, required: true },
+    username: { type: String, required: true },
+    status: { type: String, default: 'approved', enum: ['pending', 'approved', 'rejected'] },
+    requestedAt: { type: Date, default: Date.now },
+    approvedAt: { type: Date }
+});
+const Whitelist = mongoose.model('Whitelist', whitelistSchema);
+
+// ═══════════════════════════════════════════════════════════════
+// BADGES (single definition)
+// ═══════════════════════════════════════════════════════════════
 
 const BADGES = {
     'Staff': {
@@ -1376,139 +1308,156 @@ function getUserBadges(odilId) {
         }
     }
 
-    // Staff first, then TuBloxUser
     const order = { 'Staff': 0, 'TuBloxUser': 1 };
     badges.sort((a, b) => (order[a.id] ?? 99) - (order[b.id] ?? 99));
 
     return badges;
 }
-// Get badges for a user
-function getUserBadges(odilId) {
-    const badges = [];
-    
-    for (const [badgeId, badge] of Object.entries(BADGES)) {
-        // If holders is null, everyone gets it
-        if (badge.holders === null) {
-            badges.push({
-                id: badge.id,
-                name: badge.name,
-                description: badge.description,
-                icon: badge.icon,
-                color: badge.color,
-                rarity: badge.rarity
-            });
+
+// ═══════════════════════════════════════════════════════════════
+// ADMIN IDS (single source of truth)
+// ═══════════════════════════════════════════════════════════════
+
+const ADMIN_IDS = [1];
+const AUTO_APPROVE = true;
+
+// ═══════════════════════════════════════════════════════════════
+// DEFAULT GAME BUILD DATA
+// ═══════════════════════════════════════════════════════════════
+
+const defaultGames = [
+    {
+        id: 'baseplate',
+        title: 'Baseplate',
+        description: 'A simple green baseplate. Perfect for hanging out with friends!',
+        creator: 'Today_Idk',
+        creatorId: 1,
+        featured: true,
+        category: 'sandbox',
+        maxPlayers: 50,
+        buildData: {
+            objects: [
+                { type: 'cube', position: { x: 0, y: -0.5, z: 0 }, scale: { x: 100, y: 1, z: 100 }, color: { r: 0.3, g: 0.8, b: 0.3 }, isStatic: true },
+                { type: 'spawn', position: { x: 0, y: 2, z: 0 } }
+            ],
+            settings: { gravity: -20, skyColor: { r: 0.53, g: 0.81, b: 0.92 }, ambientColor: { r: 0.4, g: 0.4, b: 0.5 }, fogEnabled: false, spawnPoint: { x: 0, y: 2, z: 0 } },
+            version: 1
         }
-        // If holders is an array, check if user is in it
-        else if (Array.isArray(badge.holders) && badge.holders.includes(odilId)) {
-            badges.push({
-                id: badge.id,
-                name: badge.name,
-                description: badge.description,
-                icon: badge.icon,
-                color: badge.color,
-                rarity: badge.rarity
-            });
+    },
+    {
+        id: 'obby',
+        title: 'Obby',
+        description: 'Jump through colorful platforms and reach the golden finish!',
+        creator: 'Today_Idk',
+        creatorId: 1,
+        featured: true,
+        category: 'obby',
+        maxPlayers: 30,
+        buildData: {
+            objects: [
+                { type: 'cube', position: { x: 0, y: 0, z: 0 }, scale: { x: 8, y: 1, z: 8 }, color: { r: 0.2, g: 0.6, b: 0.2 }, isStatic: true },
+                { type: 'spawn', position: { x: 0, y: 2, z: 0 } },
+                { type: 'cube', position: { x: 0, y: 0, z: 12 }, scale: { x: 4, y: 1, z: 4 }, color: { r: 0.9, g: 0.3, b: 0.3 }, isStatic: true },
+                { type: 'cube', position: { x: 0, y: 2, z: 20 }, scale: { x: 4, y: 1, z: 4 }, color: { r: 0.9, g: 0.6, b: 0.2 }, isStatic: true },
+                { type: 'cube', position: { x: 6, y: 4, z: 20 }, scale: { x: 3, y: 1, z: 3 }, color: { r: 0.9, g: 0.9, b: 0.2 }, isStatic: true },
+                { type: 'cube', position: { x: 12, y: 6, z: 20 }, scale: { x: 3, y: 1, z: 3 }, color: { r: 0.2, g: 0.9, b: 0.2 }, isStatic: true },
+                { type: 'cube', position: { x: 12, y: 8, z: 12 }, scale: { x: 3, y: 1, z: 3 }, color: { r: 0.2, g: 0.7, b: 0.9 }, isStatic: true },
+                { type: 'cube', position: { x: 12, y: 10, z: 4 }, scale: { x: 3, y: 1, z: 3 }, color: { r: 0.5, g: 0.2, b: 0.9 }, isStatic: true },
+                { type: 'cube', position: { x: 12, y: 12, z: -4 }, scale: { x: 6, y: 1, z: 6 }, color: { r: 1.0, g: 0.84, b: 0.0 }, isStatic: true }
+            ],
+            settings: { gravity: -25, skyColor: { r: 0.4, g: 0.6, b: 0.9 }, ambientColor: { r: 0.5, g: 0.5, b: 0.6 }, fogEnabled: false, spawnPoint: { x: 0, y: 2, z: 0 } },
+            version: 1
+        }
+    },
+    {
+        id: 'hotel',
+        title: 'Hotel',
+        description: 'A beautiful hotel lobby. Relax and meet new people!',
+        creator: 'Today_Idk',
+        creatorId: 1,
+        featured: true,
+        category: 'roleplay',
+        maxPlayers: 40,
+        buildData: {
+            objects: [
+                { type: 'cube', position: { x: 0, y: 0, z: 0 }, scale: { x: 30, y: 0.5, z: 40 }, color: { r: 0.15, g: 0.1, b: 0.08 }, isStatic: true },
+                { type: 'cube', position: { x: 0, y: 0.26, z: 0 }, scale: { x: 12, y: 0.02, z: 20 }, color: { r: 0.6, g: 0.1, b: 0.15 }, isStatic: true },
+                { type: 'cube', position: { x: 0, y: 10, z: 0 }, scale: { x: 30, y: 0.5, z: 40 }, color: { r: 0.95, g: 0.93, b: 0.88 }, isStatic: true },
+                { type: 'cube', position: { x: -15, y: 5, z: 0 }, scale: { x: 0.5, y: 10, z: 40 }, color: { r: 0.85, g: 0.8, b: 0.7 }, isStatic: true },
+                { type: 'cube', position: { x: 15, y: 5, z: 0 }, scale: { x: 0.5, y: 10, z: 40 }, color: { r: 0.85, g: 0.8, b: 0.7 }, isStatic: true },
+                { type: 'cube', position: { x: 0, y: 5, z: -20 }, scale: { x: 30, y: 10, z: 0.5 }, color: { r: 0.85, g: 0.8, b: 0.7 }, isStatic: true },
+                { type: 'cube', position: { x: -10, y: 5, z: 20 }, scale: { x: 10, y: 10, z: 0.5 }, color: { r: 0.85, g: 0.8, b: 0.7 }, isStatic: true },
+                { type: 'cube', position: { x: 10, y: 5, z: 20 }, scale: { x: 10, y: 10, z: 0.5 }, color: { r: 0.85, g: 0.8, b: 0.7 }, isStatic: true },
+                { type: 'cube', position: { x: 0, y: 1.5, z: -15 }, scale: { x: 10, y: 3, z: 2 }, color: { r: 0.3, g: 0.2, b: 0.15 }, isStatic: true },
+                { type: 'cube', position: { x: -10, y: 0.8, z: 5 }, scale: { x: 5, y: 1.6, z: 2 }, color: { r: 0.2, g: 0.15, b: 0.4 }, isStatic: true },
+                { type: 'cube', position: { x: 10, y: 0.8, z: 5 }, scale: { x: 5, y: 1.6, z: 2 }, color: { r: 0.2, g: 0.15, b: 0.4 }, isStatic: true },
+                { type: 'spawn', position: { x: 0, y: 2, z: 15 } }
+            ],
+            settings: { gravity: -20, skyColor: { r: 0.1, g: 0.1, b: 0.15 }, ambientColor: { r: 0.6, g: 0.55, b: 0.5 }, fogEnabled: false, spawnPoint: { x: 0, y: 2, z: 15 } },
+            version: 1
         }
     }
-    
-    // Sort: legendary first, then rare, then common
-    const rarityOrder = { legendary: 0, epic: 1, rare: 2, uncommon: 3, common: 4 };
-    badges.sort((a, b) => (rarityOrder[a.rarity] || 99) - (rarityOrder[b.rarity] || 99));
-    
-    return badges;
-}
+];
 
 // ═══════════════════════════════════════════════════════════════
-// WHITELIST SCHEMA (Simplified)
-// ═══════════════════════════════════════════════════════════════
-
-const whitelistSchema = new mongoose.Schema({
-    odilId: { type: Number, unique: true, required: true },
-    username: { type: String, required: true },
-    status: { type: String, default: 'approved', enum: ['pending', 'approved', 'rejected'] },
-    requestedAt: { type: Date, default: Date.now },
-    approvedAt: { type: Date }
-});
-const Whitelist = mongoose.model('Whitelist', whitelistSchema);
-
-// Admin IDs
-const ADMIN_IDS = [1];
-const AUTO_APPROVE = true; // Set to false if you want manual approval
-
-// ═══════════════════════════════════════════════════════════════
-// GAME BUILD DATA
-// ═══════════════════════════════════════════════════════════════
-
-const baseplateBuildData = {
-    objects: [
-        { type: 'cube', position: { x: 0, y: -0.5, z: 0 }, scale: { x: 100, y: 1, z: 100 }, color: { r: 0.3, g: 0.8, b: 0.3 }, isStatic: true },
-        { type: 'spawn', position: { x: 0, y: 2, z: 0 } }
-    ],
-    settings: { gravity: -20, skyColor: { r: 0.53, g: 0.81, b: 0.92 }, ambientColor: { r: 0.4, g: 0.4, b: 0.5 }, fogEnabled: false, spawnPoint: { x: 0, y: 2, z: 0 } },
-    version: 1
-};
-
-const obbyBuildData = {
-    objects: [
-        { type: 'cube', position: { x: 0, y: 0, z: 0 }, scale: { x: 8, y: 1, z: 8 }, color: { r: 0.2, g: 0.6, b: 0.2 }, isStatic: true },
-        { type: 'spawn', position: { x: 0, y: 2, z: 0 } },
-        { type: 'cube', position: { x: 0, y: 0, z: 12 }, scale: { x: 4, y: 1, z: 4 }, color: { r: 0.9, g: 0.3, b: 0.3 }, isStatic: true },
-        { type: 'cube', position: { x: 0, y: 2, z: 20 }, scale: { x: 4, y: 1, z: 4 }, color: { r: 0.9, g: 0.6, b: 0.2 }, isStatic: true },
-        { type: 'cube', position: { x: 6, y: 4, z: 20 }, scale: { x: 3, y: 1, z: 3 }, color: { r: 0.9, g: 0.9, b: 0.2 }, isStatic: true },
-        { type: 'cube', position: { x: 12, y: 6, z: 20 }, scale: { x: 3, y: 1, z: 3 }, color: { r: 0.2, g: 0.9, b: 0.2 }, isStatic: true },
-        { type: 'cube', position: { x: 12, y: 8, z: 12 }, scale: { x: 3, y: 1, z: 3 }, color: { r: 0.2, g: 0.7, b: 0.9 }, isStatic: true },
-        { type: 'cube', position: { x: 12, y: 10, z: 4 }, scale: { x: 3, y: 1, z: 3 }, color: { r: 0.5, g: 0.2, b: 0.9 }, isStatic: true },
-        { type: 'cube', position: { x: 12, y: 12, z: -4 }, scale: { x: 6, y: 1, z: 6 }, color: { r: 1.0, g: 0.84, b: 0.0 }, isStatic: true }
-    ],
-    settings: { gravity: -25, skyColor: { r: 0.4, g: 0.6, b: 0.9 }, ambientColor: { r: 0.5, g: 0.5, b: 0.6 }, fogEnabled: false, spawnPoint: { x: 0, y: 2, z: 0 } },
-    version: 1
-};
-
-const hotelBuildData = {
-    objects: [
-        { type: 'cube', position: { x: 0, y: 0, z: 0 }, scale: { x: 30, y: 0.5, z: 40 }, color: { r: 0.15, g: 0.1, b: 0.08 }, isStatic: true },
-        { type: 'cube', position: { x: 0, y: 0.26, z: 0 }, scale: { x: 12, y: 0.02, z: 20 }, color: { r: 0.6, g: 0.1, b: 0.15 }, isStatic: true },
-        { type: 'cube', position: { x: 0, y: 10, z: 0 }, scale: { x: 30, y: 0.5, z: 40 }, color: { r: 0.95, g: 0.93, b: 0.88 }, isStatic: true },
-        { type: 'cube', position: { x: -15, y: 5, z: 0 }, scale: { x: 0.5, y: 10, z: 40 }, color: { r: 0.85, g: 0.8, b: 0.7 }, isStatic: true },
-        { type: 'cube', position: { x: 15, y: 5, z: 0 }, scale: { x: 0.5, y: 10, z: 40 }, color: { r: 0.85, g: 0.8, b: 0.7 }, isStatic: true },
-        { type: 'cube', position: { x: 0, y: 5, z: -20 }, scale: { x: 30, y: 10, z: 0.5 }, color: { r: 0.85, g: 0.8, b: 0.7 }, isStatic: true },
-        { type: 'cube', position: { x: -10, y: 5, z: 20 }, scale: { x: 10, y: 10, z: 0.5 }, color: { r: 0.85, g: 0.8, b: 0.7 }, isStatic: true },
-        { type: 'cube', position: { x: 10, y: 5, z: 20 }, scale: { x: 10, y: 10, z: 0.5 }, color: { r: 0.85, g: 0.8, b: 0.7 }, isStatic: true },
-        { type: 'cube', position: { x: 0, y: 1.5, z: -15 }, scale: { x: 10, y: 3, z: 2 }, color: { r: 0.3, g: 0.2, b: 0.15 }, isStatic: true },
-        { type: 'cube', position: { x: -10, y: 0.8, z: 5 }, scale: { x: 5, y: 1.6, z: 2 }, color: { r: 0.2, g: 0.15, b: 0.4 }, isStatic: true },
-        { type: 'cube', position: { x: 10, y: 0.8, z: 5 }, scale: { x: 5, y: 1.6, z: 2 }, color: { r: 0.2, g: 0.15, b: 0.4 }, isStatic: true },
-        { type: 'spawn', position: { x: 0, y: 2, z: 15 } }
-    ],
-    settings: { gravity: -20, skyColor: { r: 0.1, g: 0.1, b: 0.15 }, ambientColor: { r: 0.6, g: 0.55, b: 0.5 }, fogEnabled: false, spawnPoint: { x: 0, y: 2, z: 15 } },
-    version: 1
-};
-
-// ═══════════════════════════════════════════════════════════════
-// MONGODB CONNECTION
+// MONGODB CONNECTION (FIXED: upsert instead of deleteMany)
 // ═══════════════════════════════════════════════════════════════
 
 mongoose.connect(process.env.MONGODB_URI)
     .then(async () => {
         console.log('MongoDB connected');
         try { await mongoose.connection.collection('users').dropIndex('email_1'); } catch (e) {}
-        
+
         // Load bans from database
         const bans = await Ban.find({});
+        let loadedBans = 0;
         for (const ban of bans) {
-            if (ban.expiresAt && ban.expiresAt < new Date()) continue; // Expired
+            if (ban.expiresAt && ban.expiresAt < new Date()) {
+                // Expired ban — clean it up
+                await Ban.deleteOne({ _id: ban._id });
+                continue;
+            }
             if (ban.odilId) antiCheat.bannedOdilIds.add(ban.odilId);
             if (ban.ip) antiCheat.bannedIPs.add(ban.ip);
+            loadedBans++;
         }
-        console.log(`[AC] Loaded ${antiCheat.bannedOdilIds.size} banned users, ${antiCheat.bannedIPs.size} banned IPs`);
-        
-        await Game.deleteMany({});
-        const games = [
-            { id: 'baseplate', title: 'Baseplate', description: 'A simple green baseplate. Perfect for hanging out with friends!', creator: 'Today_Idk', creatorId: 1, featured: true, category: 'sandbox', visits: 1, maxPlayers: 50, buildData: baseplateBuildData },
-            { id: 'obby', title: 'Obby', description: 'Jump through colorful platforms and reach the golden finish!', creator: 'Today_Idk', creatorId: 1, featured: true, category: 'obby', visits: 1, maxPlayers: 30, buildData: obbyBuildData },
-            { id: 'hotel', title: 'Hotel', description: 'A beautiful hotel lobby. Relax and meet new people!', creator: 'Today_Idk', creatorId: 1, featured: true, category: 'roleplay', visits: 1, maxPlayers: 40, buildData: hotelBuildData }
-        ];
-        await Game.insertMany(games);
-        console.log(`Created ${games.length} games`);
+        console.log(`[AC] Loaded ${loadedBans} active bans (${antiCheat.bannedOdilIds.size} users, ${antiCheat.bannedIPs.size} IPs)`);
+
+        // ═══════════════════════════════════════════════════════
+        // FIX: Upsert default games instead of deleting all
+        // This preserves visits, user-created games, etc.
+        // ═══════════════════════════════════════════════════════
+        let created = 0;
+        let updated = 0;
+        for (const gameData of defaultGames) {
+            const existing = await Game.findOne({ id: gameData.id });
+            if (!existing) {
+                // Game doesn't exist yet — create it
+                await Game.create({ ...gameData, visits: 0 });
+                created++;
+                console.log(`[DB] Created default game: ${gameData.id}`);
+            } else {
+                // Game exists — update title/description/buildData but keep visits
+                await Game.updateOne(
+                    { id: gameData.id },
+                    {
+                        $set: {
+                            title: gameData.title,
+                            description: gameData.description,
+                            creator: gameData.creator,
+                            creatorId: gameData.creatorId,
+                            featured: gameData.featured,
+                            category: gameData.category,
+                            maxPlayers: gameData.maxPlayers,
+                            buildData: gameData.buildData,
+                            updatedAt: new Date()
+                        }
+                    }
+                );
+                updated++;
+            }
+        }
+        console.log(`[DB] Default games: ${created} created, ${updated} updated (visits preserved)`);
     })
     .catch(err => console.error('MongoDB error:', err));
 
@@ -1533,11 +1482,27 @@ const auth = async (req, res, next) => {
 
 const authAPI = async (req, res, next) => {
     try {
-        const token = req.cookies.token;
-        if (!token) return res.status(401).json({ success: false, message: 'Not authorized' });
+        // Try cookie first
+        let token = req.cookies.token;
+
+        // FIX: Also check Authorization header (for cross-origin / non-cookie clients)
+        if (!token && req.headers.authorization) {
+            const authHeader = req.headers.authorization;
+            if (authHeader.startsWith('Bearer ')) {
+                token = authHeader.substring(7);
+            }
+        }
+
+        if (!token) {
+            return res.status(401).json({ success: false, message: 'Not authorized' });
+        }
+
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
         const user = await User.findById(decoded.id).select('-password');
-        if (!user) { res.clearCookie('token'); return res.status(401).json({ success: false, message: 'Not authorized' }); }
+        if (!user) {
+            res.clearCookie('token');
+            return res.status(401).json({ success: false, message: 'Not authorized' });
+        }
         req.user = user;
         onlineSessions.set(user.odilId, { lastActivity: Date.now() });
         next();
@@ -1547,16 +1512,15 @@ const authAPI = async (req, res, next) => {
     }
 };
 
-// Admin check middleware
 const adminAPI = async (req, res, next) => {
     await authAPI(req, res, () => {
+        if (!req.user) return; // authAPI already sent response
         if (!antiCheat.adminIds.has(req.user.odilId)) {
             return res.status(403).json({ success: false, message: 'Admin access required' });
         }
         next();
     });
 };
-
 
 // ═══════════════════════════════════════════════════════════════
 // PAGES
@@ -1590,14 +1554,43 @@ app.get('/whitelist', (req, res) => {
     res.sendFile(path.join(__dirname, 'pages', 'whitelist.html'));
 });
 
+// ═══════════════════════════════════════════════════════════════
+// API - HEARTBEAT (FIXED: no auth required, just optional)
+// ═══════════════════════════════════════════════════════════════
 
+app.post('/api/heartbeat', async (req, res) => {
+    try {
+        // Try to authenticate but don't fail if no token
+        let token = req.cookies.token;
+        if (!token && req.headers.authorization) {
+            const authHeader = req.headers.authorization;
+            if (authHeader.startsWith('Bearer ')) {
+                token = authHeader.substring(7);
+            }
+        }
 
+        if (token) {
+            try {
+                const decoded = jwt.verify(token, process.env.JWT_SECRET);
+                const user = await User.findById(decoded.id).select('odilId');
+                if (user) {
+                    onlineSessions.set(user.odilId, { lastActivity: Date.now() });
+                }
+            } catch (tokenErr) {
+                // Invalid token — ignore, heartbeat still works
+            }
+        }
+
+        res.json({ success: true, timestamp: Date.now() });
+    } catch (err) {
+        res.json({ success: true, timestamp: Date.now() });
+    }
+});
 
 // ═══════════════════════════════════════════════════════════════
 // API - WHITELIST
 // ═══════════════════════════════════════════════════════════════
 
-// Get whitelist count
 app.get('/api/whitelist/count', async (req, res) => {
     try {
         const count = await Whitelist.countDocuments({ status: 'approved' });
@@ -1607,11 +1600,10 @@ app.get('/api/whitelist/count', async (req, res) => {
     }
 });
 
-// Check own whitelist status
 app.get('/api/whitelist/me', authAPI, async (req, res) => {
     try {
         const entry = await Whitelist.findOne({ odilId: req.user.odilId });
-        
+
         res.json({
             success: true,
             whitelisted: entry?.status === 'approved',
@@ -1623,12 +1615,10 @@ app.get('/api/whitelist/me', authAPI, async (req, res) => {
     }
 });
 
-// Request whitelist
 app.post('/api/whitelist/request', authAPI, async (req, res) => {
     try {
-        // Check if already exists
         const existing = await Whitelist.findOne({ odilId: req.user.odilId });
-        
+
         if (existing) {
             if (existing.status === 'approved') {
                 return res.json({ success: true, whitelisted: true, autoApproved: false });
@@ -1640,8 +1630,7 @@ app.post('/api/whitelist/request', authAPI, async (req, res) => {
                 return res.status(400).json({ success: false, message: 'Request was rejected' });
             }
         }
-        
-        // Create new entry
+
         const entry = new Whitelist({
             odilId: req.user.odilId,
             username: req.user.username,
@@ -1649,11 +1638,11 @@ app.post('/api/whitelist/request', authAPI, async (req, res) => {
             approvedAt: AUTO_APPROVE ? new Date() : null
         });
         await entry.save();
-        
+
         console.log(`[Whitelist] ${AUTO_APPROVE ? 'Auto-approved' : 'Request'}: #${req.user.odilId} (${req.user.username})`);
-        
-        res.json({ 
-            success: true, 
+
+        res.json({
+            success: true,
             autoApproved: AUTO_APPROVE,
             whitelisted: AUTO_APPROVE,
             pending: !AUTO_APPROVE
@@ -1664,12 +1653,11 @@ app.post('/api/whitelist/request', authAPI, async (req, res) => {
     }
 });
 
-// Check if user is whitelisted (public)
 app.get('/api/whitelist/check/:id', async (req, res) => {
     try {
         const odilId = parseInt(req.params.id);
         const entry = await Whitelist.findOne({ odilId, status: 'approved' });
-        
+
         res.json({
             success: true,
             whitelisted: !!entry
@@ -1679,79 +1667,77 @@ app.get('/api/whitelist/check/:id', async (req, res) => {
     }
 });
 
-// Admin: Get all whitelist entries
 app.get('/api/whitelist', authAPI, async (req, res) => {
     try {
         if (!ADMIN_IDS.includes(req.user.odilId)) {
             return res.status(403).json({ success: false, message: 'Admin only' });
         }
-        
+
         const { status } = req.query;
         const query = status ? { status } : {};
         const entries = await Whitelist.find(query).sort({ requestedAt: -1 });
-        
+
         res.json({ success: true, entries, count: entries.length });
     } catch (err) {
         res.status(500).json({ success: false });
     }
 });
 
-// Admin: Approve/Reject
 app.patch('/api/whitelist/:id', authAPI, async (req, res) => {
     try {
         if (!ADMIN_IDS.includes(req.user.odilId)) {
             return res.status(403).json({ success: false, message: 'Admin only' });
         }
-        
+
         const odilId = parseInt(req.params.id);
         const { status } = req.body;
-        
+
         if (!['approved', 'rejected'].includes(status)) {
             return res.status(400).json({ success: false, message: 'Invalid status' });
         }
-        
+
         const entry = await Whitelist.findOneAndUpdate(
             { odilId },
-            { 
+            {
                 status,
                 approvedAt: status === 'approved' ? new Date() : null
             },
             { new: true }
         );
-        
+
         if (!entry) {
             return res.status(404).json({ success: false, message: 'Not found' });
         }
-        
+
         console.log(`[Whitelist] ${status}: #${odilId} by admin #${req.user.odilId}`);
-        
+
         res.json({ success: true, entry });
     } catch (err) {
         res.status(500).json({ success: false });
     }
 });
 
-// Admin: Remove from whitelist
 app.delete('/api/whitelist/:id', authAPI, async (req, res) => {
     try {
         if (!ADMIN_IDS.includes(req.user.odilId)) {
             return res.status(403).json({ success: false, message: 'Admin only' });
         }
-        
+
         const odilId = parseInt(req.params.id);
         const entry = await Whitelist.findOneAndDelete({ odilId });
-        
+
         if (!entry) {
             return res.status(404).json({ success: false, message: 'Not found' });
         }
-        
+
         console.log(`[Whitelist] Removed: #${odilId} by admin #${req.user.odilId}`);
-        
+
         res.json({ success: true });
     } catch (err) {
         res.status(500).json({ success: false });
     }
 });
+
 // ═══════════════════════════════════════════════════════════════
 // API - ANTICHEAT ADMIN
 // ═══════════════════════════════════════════════════════════════
@@ -1759,13 +1745,13 @@ app.delete('/api/whitelist/:id', authAPI, async (req, res) => {
 app.get('/api/admin/ac/stats', adminAPI, (req, res) => {
     const serverStats = antiCheat.getServerStats();
     const playerStats = [];
-    
+
     antiCheat.players.forEach((player, odilId) => {
         playerStats.push(antiCheat.getStats(odilId));
     });
-    
-    res.json({ 
-        success: true, 
+
+    res.json({
+        success: true,
         server: serverStats,
         players: playerStats
     });
@@ -1774,7 +1760,7 @@ app.get('/api/admin/ac/stats', adminAPI, (req, res) => {
 app.post('/api/admin/ac/kick', adminAPI, async (req, res) => {
     const { odilId, reason } = req.body;
     if (!odilId) return res.status(400).json({ success: false, message: 'odilId required' });
-    
+
     antiCheat.kickPlayer(odilId, reason || 'Kicked by admin');
     res.json({ success: true });
 });
@@ -1782,13 +1768,12 @@ app.post('/api/admin/ac/kick', adminAPI, async (req, res) => {
 app.post('/api/admin/ac/ban', adminAPI, async (req, res) => {
     const { odilId, reason, duration } = req.body;
     if (!odilId) return res.status(400).json({ success: false, message: 'odilId required' });
-    
+
     const player = antiCheat.players.get(odilId);
     const ip = player?.ip;
-    
+
     antiCheat.banPlayer(odilId, reason || 'Banned by admin');
-    
-    // Save to database
+
     const ban = new Ban({
         odilId,
         ip,
@@ -1797,13 +1782,13 @@ app.post('/api/admin/ac/ban', adminAPI, async (req, res) => {
         expiresAt: duration ? new Date(Date.now() + duration * 1000) : null
     });
     await ban.save();
-    
+
     res.json({ success: true });
 });
 
 app.post('/api/admin/ac/unban', adminAPI, async (req, res) => {
     const { odilId, ip } = req.body;
-    
+
     if (odilId) {
         antiCheat.unbanPlayer(odilId);
         await Ban.deleteMany({ odilId });
@@ -1812,14 +1797,14 @@ app.post('/api/admin/ac/unban', adminAPI, async (req, res) => {
         antiCheat.unbanIP(ip);
         await Ban.deleteMany({ ip });
     }
-    
+
     res.json({ success: true });
 });
 
 app.post('/api/admin/ac/freeze', adminAPI, (req, res) => {
     const { odilId, freeze } = req.body;
     if (!odilId) return res.status(400).json({ success: false, message: 'odilId required' });
-    
+
     antiCheat.freezePlayer(odilId, freeze !== false);
     res.json({ success: true });
 });
@@ -1827,7 +1812,7 @@ app.post('/api/admin/ac/freeze', adminAPI, (req, res) => {
 app.post('/api/admin/ac/reset', adminAPI, (req, res) => {
     const { odilId } = req.body;
     if (!odilId) return res.status(400).json({ success: false, message: 'odilId required' });
-    
+
     antiCheat.resetPlayer(odilId);
     res.json({ success: true });
 });
@@ -1847,14 +1832,11 @@ app.get('/api/debug/presence/:id', async (req, res) => {
     res.json({ requestedOdilId: odilId, onlineSessionsCount: onlineSessions.size, onlineSessions: sessions, presence, enrichedPresence: enriched });
 });
 
-app.post('/api/heartbeat', authAPI, (req, res) => {
-    res.json({ success: true, timestamp: Date.now() });
-});
-
 app.get('/api/debug/ws', (req, res) => {
     const wsClients = [];
-    wss.clients.forEach((ws, i) => {
-        wsClients.push({ index: i, readyState: ws.readyState, isAlive: ws.isAlive });
+    let i = 0;
+    wss.clients.forEach((ws) => {
+        wsClients.push({ index: i++, readyState: ws.readyState, isAlive: ws.isAlive });
     });
     res.json({ wssClientsCount: wss.clients.size, wsClients, connectedClientsCount: connectedClients.size, gameServersCount: gameServers.size });
 });
@@ -1866,13 +1848,13 @@ app.get('/api/debug/ws', (req, res) => {
 app.get('/api/user', authAPI, (req, res) => {
     const presence = getUserPresence(req.user.odilId);
     const badges = getUserBadges(req.user.odilId);
-    
-    res.json({ 
-        success: true, 
-        user: { 
-            id: req.user._id, 
-            odilId: req.user.odilId, 
-            username: req.user.username, 
+
+    res.json({
+        success: true,
+        user: {
+            id: req.user._id,
+            odilId: req.user.odilId,
+            username: req.user.username,
             createdAt: req.user.createdAt,
             lastSeen: req.user.lastSeen,
             isOnline: presence.isOnline,
@@ -1880,9 +1862,10 @@ app.get('/api/user', authAPI, (req, res) => {
             gameData: req.user.gameData,
             isAdmin: antiCheat.adminIds.has(req.user.odilId),
             badges: badges
-        } 
+        }
     });
 });
+
 app.get('/api/users', async (req, res) => {
     try {
         const users = await User.find().select('odilId username gameData createdAt lastSeen').sort({ createdAt: -1 }).limit(100);
@@ -1896,8 +1879,8 @@ app.get('/api/users', async (req, res) => {
             return bScore - aScore;
         });
         res.json({ success: true, users: usersWithPresence });
-    } catch (err) { 
-        res.status(500).json({ success: false, message: 'Server error' }); 
+    } catch (err) {
+        res.status(500).json({ success: false, message: 'Server error' });
     }
 });
 
@@ -1905,21 +1888,20 @@ app.get('/api/user/:id', async (req, res) => {
     try {
         const odilId = parseInt(req.params.id);
         if (isNaN(odilId)) return res.status(400).json({ success: false, message: 'Invalid user ID' });
-        
+
         const user = await User.findOne({ odilId }).select('odilId username gameData createdAt lastSeen lastLogin');
         if (!user) return res.status(404).json({ success: false, message: 'User not found' });
-        
+
         const presence = getUserPresence(odilId);
         let enrichedPresence = { ...presence };
         if (presence.currentGame) {
             enrichedPresence = await enrichPresenceWithGameInfo(enrichedPresence);
         }
-        
-        // Get badges for this user
+
         const badges = getUserBadges(odilId);
-        
-        res.json({ 
-            success: true, 
+
+        res.json({
+            success: true,
             user: {
                 odilId: user.odilId,
                 username: user.username,
@@ -1932,9 +1914,9 @@ app.get('/api/user/:id', async (req, res) => {
                 badges: badges
             }
         });
-    } catch (err) { 
+    } catch (err) {
         console.error('[API] User error:', err);
-        res.status(500).json({ success: false, message: 'Server error' }); 
+        res.status(500).json({ success: false, message: 'Server error' });
     }
 });
 
@@ -1942,29 +1924,25 @@ app.get('/api/user/:id', async (req, res) => {
 // API - BADGES
 // ═══════════════════════════════════════════════════════════════
 
-// Get all available badges
 app.get('/api/badges', (req, res) => {
     const allBadges = Object.values(BADGES).map(b => ({
         id: b.id,
         name: b.name,
         description: b.description,
         icon: b.icon,
-        color: b.color,
-        rarity: b.rarity,
         isExclusive: b.holders !== null
     }));
     res.json({ success: true, badges: allBadges });
 });
 
-// Get badges for specific user
 app.get('/api/user/:id/badges', async (req, res) => {
     try {
         const odilId = parseInt(req.params.id);
         if (isNaN(odilId)) return res.status(400).json({ success: false, message: 'Invalid user ID' });
-        
+
         const user = await User.findOne({ odilId }).select('odilId username');
         if (!user) return res.status(404).json({ success: false, message: 'User not found' });
-        
+
         const badges = getUserBadges(odilId);
         res.json({ success: true, badges, username: user.username, odilId: user.odilId });
     } catch (err) {
@@ -1981,7 +1959,7 @@ app.post('/api/register', async (req, res) => {
     try {
         const { username, password } = req.body;
         if (!username || !password) return res.status(400).json({ success: false, message: 'All fields required' });
-        
+
         const cleanUsername = username.toLowerCase().trim();
         if (cleanUsername.length < 3 || cleanUsername.length > 20) return res.status(400).json({ success: false, message: 'Username must be 3-20 characters' });
         if (!/^[a-z0-9_]+$/.test(cleanUsername)) return res.status(400).json({ success: false, message: 'Username can only contain letters, numbers and underscore' });
@@ -1996,8 +1974,8 @@ app.post('/api/register', async (req, res) => {
         await user.save();
 
         const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: '7d' });
-        res.cookie('token', token, { httpOnly: true, maxAge: 7 * 24 * 60 * 60 * 1000, sameSite: 'strict' });
-        res.json({ success: true, odilId });
+        res.cookie('token', token, { httpOnly: true, maxAge: 7 * 24 * 60 * 60 * 1000, sameSite: 'lax', secure: process.env.NODE_ENV === 'production' });
+        res.json({ success: true, odilId, token }); // FIX: return token in body too
     } catch (err) {
         console.error(err);
         res.status(500).json({ success: false, message: 'Server error' });
@@ -2013,7 +1991,6 @@ app.post('/api/login', async (req, res) => {
         const user = await User.findOne({ username: cleanUsername });
         if (!user) return res.status(400).json({ success: false, message: 'Invalid username or password' });
 
-        // Check if banned
         if (antiCheat.bannedOdilIds.has(user.odilId)) {
             return res.status(403).json({ success: false, message: 'Your account is banned' });
         }
@@ -2026,8 +2003,8 @@ app.post('/api/login', async (req, res) => {
         await user.save();
 
         const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: '7d' });
-        res.cookie('token', token, { httpOnly: true, maxAge: 7 * 24 * 60 * 60 * 1000, sameSite: 'strict' });
-        res.json({ success: true });
+        res.cookie('token', token, { httpOnly: true, maxAge: 7 * 24 * 60 * 60 * 1000, sameSite: 'lax', secure: process.env.NODE_ENV === 'production' });
+        res.json({ success: true, token }); // FIX: return token in body too
     } catch (err) {
         console.error(err);
         res.status(500).json({ success: false, message: 'Server error' });
@@ -2056,21 +2033,21 @@ app.get('/api/games', async (req, res) => {
         const pageNum = Math.max(1, parseInt(page) || 1);
         const limitNum = Math.min(12, Math.max(1, parseInt(limit) || 3));
         const skip = (pageNum - 1) * limitNum;
-        
+
         let query = {};
         if (featured === 'true') query.featured = true;
         if (category && category !== 'all') query.category = category;
-        
+
         const totalGames = await Game.countDocuments(query);
         const totalPages = Math.ceil(totalGames / limitNum);
-        
+
         const games = await Game.find(query).select('-buildData').sort({ featured: -1, visits: -1 }).skip(skip).limit(limitNum);
-        
+
         const gamesWithPlayers = games.map(g => {
             const gameServer = gameServers.get(g.id);
             return { ...g.toObject(), activePlayers: gameServer ? gameServer.players.size : 0 };
         });
-        
+
         res.json({ success: true, games: gamesWithPlayers, pagination: { currentPage: pageNum, totalPages, totalGames, gamesPerPage: limitNum, hasNextPage: pageNum < totalPages, hasPrevPage: pageNum > 1 } });
     } catch (err) {
         console.error('[API] Games error:', err);
@@ -2101,18 +2078,17 @@ app.post('/api/game/launch', authAPI, async (req, res) => {
         const { gameId } = req.body;
         const game = await Game.findOne({ id: gameId });
         if (!game) return res.status(404).json({ success: false, message: 'Game not found' });
-        
-        // Check if user is banned
+
         if (antiCheat.bannedOdilIds.has(req.user.odilId)) {
             return res.status(403).json({ success: false, message: 'You are banned from playing' });
         }
-        
-        game.visits += 1;
-        await game.save();
-        
+
+        // FIX: atomic increment for visits
+        await Game.updateOne({ id: gameId }, { $inc: { visits: 1 } });
+
         const launchToken = crypto.randomBytes(32).toString('hex');
         await LaunchToken.create({ token: launchToken, odilId: req.user.odilId, username: req.user.username, gameId: game.id });
-        
+
         const wsHost = process.env.RENDER_EXTERNAL_HOSTNAME || process.env.WS_HOST || 'tublox.onrender.com';
         res.json({ success: true, token: launchToken, wsHost, wsPort: 443, gameId: game.id });
     } catch (err) {
@@ -2125,25 +2101,24 @@ app.get('/api/game/validate/:token', async (req, res) => {
     try {
         const launchData = await LaunchToken.findOne({ token: req.params.token });
         if (!launchData) return res.status(404).json({ success: false, message: 'Invalid or expired token' });
-        
-        // Check if banned
+
         if (antiCheat.bannedOdilIds.has(launchData.odilId)) {
             await LaunchToken.deleteOne({ token: req.params.token });
             return res.status(403).json({ success: false, message: 'You are banned' });
         }
-        
+
         const game = await Game.findOne({ id: launchData.gameId });
         await LaunchToken.deleteOne({ token: req.params.token });
-        
+
         const wsHost = process.env.RENDER_EXTERNAL_HOSTNAME || process.env.WS_HOST || 'tublox.onrender.com';
-        res.json({ 
-            success: true, 
-            odilId: launchData.odilId, 
-            username: launchData.username, 
-            gameId: launchData.gameId, 
-            wsHost, 
-            wsPort: 443, 
-            buildData: game?.buildData || baseplateBuildData,
+        res.json({
+            success: true,
+            odilId: launchData.odilId,
+            username: launchData.username,
+            gameId: launchData.gameId,
+            wsHost,
+            wsPort: 443,
+            buildData: game?.buildData || defaultGames[0].buildData,
             gameName: game?.title || launchData.gameId,
             creatorName: game?.creator || 'Unknown'
         });
@@ -2176,11 +2151,11 @@ app.get('/api/forum/posts', async (req, res) => {
         const pageNum = Math.max(1, parseInt(page) || 1);
         const limitNum = Math.min(50, Math.max(1, parseInt(limit) || 15));
         const skip = (pageNum - 1) * limitNum;
-        
+
         let query = {};
         if (category && category !== 'all') query.category = category;
         if (search) query.$or = [{ title: { $regex: search, $options: 'i' } }, { content: { $regex: search, $options: 'i' } }];
-        
+
         let sortOption = { isPinned: -1 };
         switch (sort) {
             case 'newest': sortOption.createdAt = -1; break;
@@ -2190,11 +2165,11 @@ app.get('/api/forum/posts', async (req, res) => {
             case 'mostreplies': sortOption.replies = -1; break;
             default: sortOption.createdAt = -1;
         }
-        
+
         const totalPosts = await ForumPost.countDocuments(query);
         const totalPages = Math.ceil(totalPosts / limitNum);
         const posts = await ForumPost.find(query).sort(sortOption).skip(skip).limit(limitNum).lean();
-        
+
         res.json({ success: true, posts, pagination: { currentPage: pageNum, totalPages, totalPosts, hasNextPage: pageNum < totalPages, hasPrevPage: pageNum > 1 } });
     } catch (err) {
         console.error('[Forum] Get posts error:', err);
@@ -2209,14 +2184,14 @@ app.get('/api/forum/user/:ownerId/posts', async (req, res) => {
         const limitNum = Math.min(50, Math.max(1, parseInt(limit) || 15));
         const skip = (pageNum - 1) * limitNum;
         const authorId = parseInt(req.params.ownerId);
-        
+
         const user = await User.findOne({ odilId: authorId }).select('username odilId');
         if (!user) return res.status(404).json({ success: false, message: 'User not found' });
-        
+
         const totalPosts = await ForumPost.countDocuments({ authorId });
         const totalPages = Math.ceil(totalPosts / limitNum);
         const posts = await ForumPost.find({ authorId }).sort({ createdAt: -1 }).skip(skip).limit(limitNum).lean();
-        
+
         res.json({ success: true, user: { username: user.username, odilId: user.odilId }, posts, pagination: { currentPage: pageNum, totalPages, totalPosts, hasNextPage: pageNum < totalPages, hasPrevPage: pageNum > 1 } });
     } catch (err) {
         console.error('[Forum] Get user posts error:', err);
@@ -2226,12 +2201,17 @@ app.get('/api/forum/user/:ownerId/posts', async (req, res) => {
 
 app.get('/api/forum/post/:ownerId/:postId', async (req, res) => {
     try {
-        const post = await ForumPost.findOne({ postId: parseInt(req.params.postId), authorId: parseInt(req.params.ownerId) });
+        const postId = parseInt(req.params.postId);
+        const authorId = parseInt(req.params.ownerId);
+
+        // FIX: atomic view increment
+        const post = await ForumPost.findOneAndUpdate(
+            { postId, authorId },
+            { $inc: { views: 1 } },
+            { new: true }
+        );
         if (!post) return res.status(404).json({ success: false, message: 'Post not found' });
-        
-        post.views += 1;
-        await post.save();
-        
+
         const replies = await ForumReply.find({ postId: post.postId }).sort({ createdAt: 1 }).lean();
         res.json({ success: true, post, replies });
     } catch (err) {
@@ -2242,22 +2222,21 @@ app.get('/api/forum/post/:ownerId/:postId', async (req, res) => {
 
 app.post('/api/forum/posts', authAPI, async (req, res) => {
     try {
-        // Check if banned
         if (antiCheat.bannedOdilIds.has(req.user.odilId)) {
             return res.status(403).json({ success: false, message: 'You are banned' });
         }
-        
+
         const { title, content, category } = req.body;
         if (!title || !content) return res.status(400).json({ success: false, message: 'Title and content required' });
         if (title.length > 100) return res.status(400).json({ success: false, message: 'Title too long (max 100)' });
         if (content.length > 5000) return res.status(400).json({ success: false, message: 'Content too long (max 5000)' });
-        
+
         const validCategory = FORUM_CATEGORIES.find(c => c.id === category);
         const postId = await getNextPostId();
-        
+
         const post = new ForumPost({ postId, authorId: req.user.odilId, authorName: req.user.username, title: title.trim(), content: content.trim(), category: validCategory ? category : 'general' });
         await post.save();
-        
+
         res.json({ success: true, post, url: `/TuForums/${req.user.odilId}/${postId}` });
     } catch (err) {
         console.error('[Forum] Create post error:', err);
@@ -2267,27 +2246,25 @@ app.post('/api/forum/posts', authAPI, async (req, res) => {
 
 app.post('/api/forum/post/:postId/reply', authAPI, async (req, res) => {
     try {
-        // Check if banned
         if (antiCheat.bannedOdilIds.has(req.user.odilId)) {
             return res.status(403).json({ success: false, message: 'You are banned' });
         }
-        
+
         const { content } = req.body;
         if (!content || content.trim().length === 0) return res.status(400).json({ success: false, message: 'Content required' });
         if (content.length > 2000) return res.status(400).json({ success: false, message: 'Reply too long (max 2000)' });
-        
+
         const post = await ForumPost.findOne({ postId: parseInt(req.params.postId) });
         if (!post) return res.status(404).json({ success: false, message: 'Post not found' });
         if (post.isLocked) return res.status(403).json({ success: false, message: 'Post is locked' });
-        
+
         const replyId = await getNextReplyId();
         const reply = new ForumReply({ replyId, postId: post.postId, authorId: req.user.odilId, authorName: req.user.username, content: content.trim() });
         await reply.save();
-        
-        post.replies += 1;
-        post.updatedAt = new Date();
-        await post.save();
-        
+
+        // FIX: atomic increment
+        await ForumPost.updateOne({ postId: post.postId }, { $inc: { replies: 1 }, $set: { updatedAt: new Date() } });
+
         res.json({ success: true, reply });
     } catch (err) {
         console.error('[Forum] Create reply error:', err);
@@ -2299,15 +2276,18 @@ app.post('/api/forum/post/:postId/like', authAPI, async (req, res) => {
     try {
         const post = await ForumPost.findOne({ postId: parseInt(req.params.postId) });
         if (!post) return res.status(404).json({ success: false, message: 'Post not found' });
-        
+
         const userId = req.user.odilId;
         const hasLiked = post.likes.includes(userId);
-        
-        if (hasLiked) post.likes = post.likes.filter(id => id !== userId);
-        else post.likes.push(userId);
-        
-        await post.save();
-        res.json({ success: true, liked: !hasLiked, likesCount: post.likes.length });
+
+        if (hasLiked) {
+            await ForumPost.updateOne({ postId: post.postId }, { $pull: { likes: userId } });
+        } else {
+            await ForumPost.updateOne({ postId: post.postId }, { $addToSet: { likes: userId } });
+        }
+
+        const updated = await ForumPost.findOne({ postId: post.postId });
+        res.json({ success: true, liked: !hasLiked, likesCount: updated.likes.length });
     } catch (err) {
         console.error('[Forum] Like post error:', err);
         res.status(500).json({ success: false, message: 'Server error' });
@@ -2318,15 +2298,18 @@ app.post('/api/forum/reply/:replyId/like', authAPI, async (req, res) => {
     try {
         const reply = await ForumReply.findOne({ replyId: parseInt(req.params.replyId) });
         if (!reply) return res.status(404).json({ success: false, message: 'Reply not found' });
-        
+
         const userId = req.user.odilId;
         const hasLiked = reply.likes.includes(userId);
-        
-        if (hasLiked) reply.likes = reply.likes.filter(id => id !== userId);
-        else reply.likes.push(userId);
-        
-        await reply.save();
-        res.json({ success: true, liked: !hasLiked, likesCount: reply.likes.length });
+
+        if (hasLiked) {
+            await ForumReply.updateOne({ replyId: reply.replyId }, { $pull: { likes: userId } });
+        } else {
+            await ForumReply.updateOne({ replyId: reply.replyId }, { $addToSet: { likes: userId } });
+        }
+
+        const updated = await ForumReply.findOne({ replyId: reply.replyId });
+        res.json({ success: true, liked: !hasLiked, likesCount: updated.likes.length });
     } catch (err) {
         console.error('[Forum] Like reply error:', err);
         res.status(500).json({ success: false, message: 'Server error' });
@@ -2337,15 +2320,14 @@ app.delete('/api/forum/post/:postId', authAPI, async (req, res) => {
     try {
         const post = await ForumPost.findOne({ postId: parseInt(req.params.postId) });
         if (!post) return res.status(404).json({ success: false, message: 'Post not found' });
-        
-        // Allow admins or post author
+
         if (post.authorId !== req.user.odilId && !antiCheat.adminIds.has(req.user.odilId)) {
             return res.status(403).json({ success: false, message: 'Not authorized' });
         }
-        
+
         await ForumReply.deleteMany({ postId: post.postId });
         await post.deleteOne();
-        
+
         res.json({ success: true });
     } catch (err) {
         console.error('[Forum] Delete post error:', err);

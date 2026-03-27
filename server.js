@@ -391,6 +391,7 @@ app.get('/TuForums', (req, res) => res.sendFile(path.join(__dirname, 'pages', 'f
 app.get('/TuForums/:ownerId', (req, res) => res.sendFile(path.join(__dirname, 'pages', 'forum-user.html')));
 app.get('/TuForums/:ownerId/:postId', (req, res) => res.sendFile(path.join(__dirname, 'pages', 'forum-post.html')));
 app.get('/whitelist', (req, res) => res.sendFile(path.join(__dirname, 'pages', 'whitelist.html')));
+app.get('/settings', auth, (req, res) => res.sendFile(path.join(__dirname, 'pages', 'settings.html')));
 
 // ═══════════════════════════════════════════════════════════════
 // API - HEALTH
@@ -559,6 +560,86 @@ app.get('/api/user/:id', async (req, res) => {
         });
     } catch (err) {
         console.error('[API] User error:', err);
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+});
+
+// ═══════════════════════════════════════════════════════════════
+// API - USER SETTINGS
+// ═══════════════════════════════════════════════════════════════
+
+// Change username
+app.patch('/api/user/username', authAPI, async (req, res) => {
+    try {
+        const { username } = req.body;
+        if (!username) return res.status(400).json({ success: false, message: 'Username required' });
+
+        const cleanUsername = username.toLowerCase().trim();
+        if (cleanUsername.length < 3 || cleanUsername.length > 20) 
+            return res.status(400).json({ success: false, message: 'Username must be 3-20 characters' });
+        if (!/^[a-z0-9_]+$/.test(cleanUsername)) 
+            return res.status(400).json({ success: false, message: 'Username: letters, numbers, underscore only' });
+
+        // Check if username is taken
+        const exists = await User.findOne({ username: cleanUsername, _id: { $ne: req.user._id } });
+        if (exists) return res.status(400).json({ success: false, message: 'Username already taken' });
+
+        // Update username
+        await User.findByIdAndUpdate(req.user._id, { username: cleanUsername });
+
+        res.json({ success: true, username: cleanUsername });
+    } catch (err) {
+        console.error('[Username Change]', err);
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+});
+
+// Change password
+app.patch('/api/user/password', authAPI, async (req, res) => {
+    try {
+        const { currentPassword, newPassword } = req.body;
+        if (!currentPassword || !newPassword) 
+            return res.status(400).json({ success: false, message: 'All fields required' });
+
+        if (newPassword.length < 6) 
+            return res.status(400).json({ success: false, message: 'New password must be at least 6 characters' });
+
+        // Get user with password
+        const user = await User.findById(req.user._id);
+        if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+
+        // Verify current password
+        const valid = await bcrypt.compare(currentPassword, user.password);
+        if (!valid) return res.status(400).json({ success: false, message: 'Current password is incorrect' });
+
+        // Hash new password
+        const hash = await bcrypt.hash(newPassword, 12);
+        await User.findByIdAndUpdate(req.user._id, { password: hash });
+
+        res.json({ success: true });
+    } catch (err) {
+        console.error('[Password Change]', err);
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+});
+
+// Verify password (for viewing)
+app.post('/api/user/verify-password', authAPI, async (req, res) => {
+    try {
+        const { password } = req.body;
+        if (!password) return res.status(400).json({ success: false, message: 'Password required' });
+
+        // Get user with password
+        const user = await User.findById(req.user._id);
+        if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+
+        // Verify password
+        const valid = await bcrypt.compare(password, user.password);
+        if (!valid) return res.status(400).json({ success: false, message: 'Incorrect password' });
+
+        res.json({ success: true });
+    } catch (err) {
+        console.error('[Password Verify]', err);
         res.status(500).json({ success: false, message: 'Server error' });
     }
 });

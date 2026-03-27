@@ -27,8 +27,6 @@
     --accent: #4ade80;
     --accent-hover: #22c55e;
     --play-green: #4ade80;
-    --cta-bg: #38bdf8;
-    --cta-bg-dark: #0ea5e9;
     --radius: 10px;
     --radius-lg: 14px;
     --radius-xl: 18px;
@@ -68,6 +66,66 @@ a {
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--border-light); }
+
+/* ============================================
+   THEME VARIANTS
+   ============================================ */
+
+/* Dark Theme (Default) */
+.theme-dark,
+body:not(.theme-super-dark) {
+    --bg: #1a1a2e;
+    --bg-dark: #12121f;
+    --bg-card: #0d0d18;
+    --bg-elevated: #1e1e35;
+    --card: #16162b;
+    --border: #2a2a45;
+    --border-light: #3a3a55;
+    --border-hover: #4a4a65;
+}
+
+/* Super Dark Theme (OLED) */
+.theme-super-dark {
+    --bg: #000000;
+    --bg-dark: #000000;
+    --bg-card: #000000;
+    --bg-elevated: #0a0a0a;
+    --card: #0a0a0a;
+    --border: #1a1a1a;
+    --border-light: #252525;
+    --border-hover: #333333;
+}
+
+.theme-super-dark .navbar {
+    background: rgba(0,0,0,0.95);
+    border-color: var(--border);
+}
+
+.theme-super-dark .landing-hero-overlay {
+    background: linear-gradient(
+        to bottom,
+        rgba(0,0,0,0.5) 0%,
+        rgba(0,0,0,0.6) 40%,
+        rgba(0,0,0,0.9) 80%,
+        rgba(0,0,0,1) 100%
+    );
+}
+
+.theme-super-dark .landing-register-card {
+    background: rgba(0,0,0,0.95);
+}
+
+.theme-super-dark .auth-bg-overlay {
+    background: rgba(0,0,0,0.92);
+}
+
+.theme-super-dark .auth-card {
+    background: rgba(0,0,0,0.95);
+}
+
+.theme-super-dark .landing-cta {
+    background: #000000;
+}
 
 /* ============================================
    LOGO
@@ -210,6 +268,16 @@ a {
     opacity: 0.35;
     cursor: not-allowed;
     transform: none;
+}
+
+.btn-icon {
+    padding: 12px;
+    min-width: 48px;
+}
+
+.btn-icon .icon {
+    width: 20px;
+    height: 20px;
 }
 
 .icon {
@@ -511,7 +579,7 @@ a {
 }
 
 /* ============================================
-   LANDING — CTA
+   LANDING — CTA (Black & White Style)
    ============================================ */
 
 .landing-cta {
@@ -581,6 +649,7 @@ a {
     color: var(--gray);
     font-weight: 500;
 }
+
 /* ============================================
    LANDING — FOOTER
    ============================================ */
@@ -2125,6 +2194,277 @@ a {
 .games-empty p { font-size: 14px; }
 
 /* ============================================
+   SETTINGS PAGE
+   ============================================ */
+
+.settings-page {
+    padding-top: 74px;
+    min-height: 100vh;
+}
+
+.settings-content {
+    max-width: 600px;
+    margin: 0 auto;
+    padding: 48px 24px;
+}
+
+.settings-header {
+    margin-bottom: 32px;
+}
+
+.settings-header h1 {
+    font-size: 28px;
+    font-weight: 700;
+    margin-bottom: 8px;
+}
+
+.settings-header p {
+    color: var(--gray);
+    font-size: 15px;
+}
+
+/* Section */
+.settings-section {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    margin-bottom: 16px;
+    overflow: hidden;
+}
+
+.settings-section-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border);
+    background: rgba(255,255,255,0.02);
+}
+
+.settings-section-header svg {
+    width: 20px;
+    height: 20px;
+    stroke: var(--gray);
+    flex-shrink: 0;
+}
+
+.settings-section-header h2 {
+    font-size: 15px;
+    font-weight: 600;
+}
+
+.settings-section-body {
+    padding: 20px;
+}
+
+/* Theme Selector */
+.theme-selector {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+}
+
+.theme-option {
+    position: relative;
+    cursor: pointer;
+    border: 2px solid var(--border);
+    border-radius: 12px;
+    padding: 12px;
+    transition: all var(--transition);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+}
+
+.theme-option input {
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+}
+
+.theme-option:hover {
+    border-color: var(--border-light);
+}
+
+.theme-option.active {
+    border-color: var(--white);
+    background: rgba(255,255,255,0.03);
+}
+
+.theme-preview {
+    width: 100%;
+    aspect-ratio: 16 / 10;
+    border-radius: 8px;
+    overflow: hidden;
+    position: relative;
+}
+
+.theme-preview-dark {
+    background: #12121f;
+}
+
+.theme-preview-super-dark {
+    background: #000000;
+}
+
+.theme-preview-header {
+    height: 20%;
+    background: rgba(255,255,255,0.05);
+    border-bottom: 1px solid rgba(255,255,255,0.1);
+}
+
+.theme-preview-content {
+    padding: 8%;
+    display: flex;
+    gap: 6%;
+}
+
+.theme-preview-card {
+    flex: 1;
+    aspect-ratio: 1;
+    border-radius: 4px;
+    background: rgba(255,255,255,0.08);
+    border: 1px solid rgba(255,255,255,0.1);
+}
+
+.theme-preview-super-dark .theme-preview-header {
+    background: rgba(255,255,255,0.03);
+    border-color: rgba(255,255,255,0.06);
+}
+
+.theme-preview-super-dark .theme-preview-card {
+    background: rgba(255,255,255,0.04);
+    border-color: rgba(255,255,255,0.06);
+}
+
+.theme-name {
+    font-size: 14px;
+    font-weight: 600;
+}
+
+.theme-desc {
+    font-size: 12px;
+    color: var(--gray);
+    text-align: center;
+}
+
+/* Settings Fields */
+.settings-field {
+    margin-bottom: 16px;
+}
+
+.settings-field:last-child {
+    margin-bottom: 0;
+}
+
+.settings-label {
+    display: block;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--gray);
+    margin-bottom: 8px;
+}
+
+.settings-current-value {
+    font-size: 18px;
+    font-weight: 600;
+    padding: 12px 16px;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+}
+
+.settings-input-group {
+    display: flex;
+    gap: 10px;
+}
+
+.settings-input-group .form-input {
+    flex: 1;
+}
+
+.settings-hint {
+    margin-top: 8px;
+    font-size: 12px;
+    color: var(--gray-dark);
+}
+
+.settings-divider {
+    height: 1px;
+    background: var(--border);
+    margin: 20px 0;
+}
+
+/* Password Display */
+.password-display {
+    display: flex;
+    gap: 10px;
+}
+
+.password-display .form-input {
+    flex: 1;
+    font-family: monospace;
+    letter-spacing: 2px;
+}
+
+/* Info Grid */
+.settings-info-grid {
+    display: grid;
+    gap: 12px;
+}
+
+.settings-info-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 16px;
+    background: rgba(255,255,255,0.03);
+    border-radius: 10px;
+}
+
+.settings-info-label {
+    font-size: 13px;
+    color: var(--gray);
+}
+
+.settings-info-value {
+    font-size: 14px;
+    font-weight: 500;
+}
+
+/* Danger Zone */
+.settings-section-danger .settings-section-header {
+    background: rgba(248,113,113,0.05);
+}
+
+.settings-section-danger .settings-section-header svg {
+    stroke: var(--red);
+}
+
+.settings-section-danger .settings-section-header h2 {
+    color: var(--red);
+}
+
+.settings-danger-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 20px;
+}
+
+.settings-danger-item h4 {
+    font-size: 14px;
+    font-weight: 600;
+    margin-bottom: 4px;
+}
+
+.settings-danger-item p {
+    font-size: 13px;
+    color: var(--gray);
+}
+
+/* ============================================
    SITE FOOTER (inner pages)
    ============================================ */
 
@@ -2290,6 +2630,33 @@ a {
 
     .landing-footer-inner { padding: 0 20px; }
     .landing-footer-links { flex-direction: column; gap: 24px; }
+    
+    /* Settings responsive */
+    .settings-content {
+        padding: 24px 16px;
+    }
+    
+    .theme-selector {
+        grid-template-columns: 1fr;
+    }
+    
+    .settings-input-group {
+        flex-direction: column;
+    }
+    
+    .settings-input-group .btn {
+        width: 100%;
+    }
+    
+    .settings-danger-item {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+    
+    .settings-danger-item .btn {
+        width: 100%;
+        margin-top: 12px;
+    }
 }
 
 @media (max-width: 400px) {

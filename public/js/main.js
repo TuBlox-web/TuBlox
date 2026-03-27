@@ -7,6 +7,59 @@ let heartbeatInterval = null;
 let profileRefreshInterval = null;
 
 // ============================================
+// NAVIGATION BUILDER
+// ============================================
+
+function buildNavigation() {
+    // Skip for auth, landing, countdown pages
+    if (document.querySelector('.auth-page') || 
+        document.querySelector('.landing-hero') || 
+        document.querySelector('.countdown-page')) {
+        return;
+    }
+    
+    var navRight = document.querySelector('.nav-right');
+    if (!navRight) return;
+    
+    // Clear existing content
+    navRight.innerHTML = '';
+    
+    // Get current page
+    var path = window.location.pathname;
+    
+    // Navigation items
+    var navItems = [
+        { href: '/home', label: 'Home', match: ['/home'] },
+        { href: '/games', label: 'Games', match: ['/games', '/game/'] },
+        { href: '/TuForums', label: 'Forums', match: ['/TuForums'] },
+        { href: '/users', label: 'Players', match: ['/users', '/user/'] },
+        { href: '/settings', label: 'Settings', match: ['/settings'] }
+    ];
+    
+    // Build navigation links
+    navItems.forEach(function(item) {
+        var a = document.createElement('a');
+        a.href = item.href;
+        a.className = 'btn btn-ghost';
+        a.textContent = item.label;
+        
+        // Check if current page matches
+        var isActive = item.match.some(function(m) {
+            if (m.endsWith('/')) {
+                return path.startsWith(m);
+            }
+            return path === m;
+        });
+        
+        if (isActive) {
+            a.classList.add('active');
+        }
+        
+        navRight.appendChild(a);
+    });
+}
+
+// ============================================
 // BADGE TOOLTIP CSS (injected once)
 // ============================================
 
@@ -27,12 +80,31 @@ function injectBadgeStyles() {
     document.head.appendChild(style);
 }
 
+function injectNavStyles() {
+    if (document.getElementById('nav-active-css')) return;
+    var style = document.createElement('style');
+    style.id = 'nav-active-css';
+    style.textContent =
+        '.nav-right .btn-ghost.active{color:var(--white);background:rgba(255,255,255,0.08);}';
+    document.head.appendChild(style);
+}
+
 function getBadgeTooltip(badgeId) {
     var map = {
         'Staff': 'Staff',
         'TuBloxUser': 'User'
     };
     return map[badgeId] || badgeId;
+}
+
+// ============================================
+// THEME
+// ============================================
+
+function initTheme() {
+    var savedTheme = localStorage.getItem('tublox-theme') || 'dark';
+    document.body.classList.remove('theme-dark', 'theme-super-dark');
+    document.body.classList.add('theme-' + savedTheme);
 }
 
 // ============================================
@@ -606,11 +678,10 @@ async function loadUsers() {
 }
 
 // ============================================
-// PROFILE (FIXED: no status pill, bigger badges with tooltip)
+// PROFILE
 // ============================================
 
 function buildProfileHTML(u) {
-    // Badges with tooltips
     var badgesHtml = '';
     if (u.badges && u.badges.length > 0) {
         var badgeItems = '';
@@ -625,7 +696,6 @@ function buildProfileHTML(u) {
         badgesHtml = '<div class="profile-avatar-badges">' + badgeItems + '</div>';
     }
 
-    // Currently playing card
     var playingHtml = '';
     if (u.currentGame) {
         var game = u.currentGame;
@@ -648,10 +718,8 @@ function buildProfileHTML(u) {
             '</div>';
     }
 
-    // Last seen in info card (no "Online" label — just date or nothing)
     var lastSeenValue;
     if (u.isOnline || u.currentGame) {
-        // Don't show "Online" — show join date context or just dash
         lastSeenValue = '<span class="profile-info-value">Now</span>';
     } else if (u.lastSeen) {
         lastSeenValue = '<span class="profile-info-value">' + formatDate(u.lastSeen) + '</span>';
@@ -659,7 +727,6 @@ function buildProfileHTML(u) {
         lastSeenValue = '<span class="profile-info-value">Unknown</span>';
     }
 
-    // Frame 1 — Avatar with name on top, badges below, NO status pill
     var frame1 =
         '<div class="profile-avatar-frame">' +
             '<div class="profile-frame-top">' +
@@ -672,7 +739,6 @@ function buildProfileHTML(u) {
             '</div>' +
         '</div>';
 
-    // Frame 2 — Info card
     var frame2 =
         '<div class="profile-info-card">' +
             '<div class="profile-info-header">' +
@@ -706,7 +772,6 @@ async function loadProfile() {
     var id = location.pathname.split('/').pop();
     content.innerHTML = '<div class="loading-placeholder large"><div class="spinner"></div></div>';
 
-    // Inject badge tooltip styles
     injectBadgeStyles();
 
     try {
@@ -737,7 +802,6 @@ function startProfileRefresh(userId) {
             if (!data.success) return;
             var u = data.user;
 
-            // Update last seen row
             var lastSeenRow = document.getElementById('profile-lastseen-row');
             if (lastSeenRow) {
                 var lsVal;
@@ -757,7 +821,6 @@ function startProfileRefresh(userId) {
                 }
             }
 
-            // Update playing card
             var playingEl = document.querySelector('.profile-playing');
             if (u.currentGame) {
                 var game = u.currentGame;
@@ -837,7 +900,10 @@ function stopHeartbeat() {
 // ============================================
 
 function createFooter() {
-    if (document.querySelector('.auth-page') || document.querySelector('.countdown-page')) return;
+    if (document.querySelector('.auth-page') || 
+        document.querySelector('.countdown-page') ||
+        document.querySelector('.landing-hero')) return;
+    
     var footer = document.createElement('footer');
     footer.className = 'site-footer';
     footer.innerHTML =
@@ -885,6 +951,15 @@ function createFooter() {
 // ============================================
 
 document.addEventListener('DOMContentLoaded', function () {
+    // Apply saved theme
+    initTheme();
+    
+    // Inject nav styles
+    injectNavStyles();
+    
+    // Build navigation
+    buildNavigation();
+    
     startHeartbeat();
     createFooter();
 
@@ -895,38 +970,39 @@ document.addEventListener('DOMContentLoaded', function () {
         var logForm = document.getElementById('login-form');
         if (logForm) logForm.addEventListener('submit', login);
     }
-// В секцию DOMContentLoaded добавь:
-var landingRegForm = document.getElementById('landing-register-form');
-if (landingRegForm) {
-    landingRegForm.addEventListener('submit', async function(e) {
-        e.preventDefault();
-        var btn = e.target.querySelector('button');
-        var html = btn.innerHTML;
-        btn.innerHTML = '<div class="loader"></div>';
-        btn.disabled = true;
-        try {
-            var res = await fetch('/api/register', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    username: document.getElementById('landing-username').value,
-                    password: document.getElementById('landing-password').value
-                })
-            });
-            var data = await res.json();
-            if (data.success) {
-                toast('Account created! Welcome to TuBlox!');
-                setTimeout(function() { location.href = '/home'; }, 1000);
-            } else {
-                toast(data.message, 'error');
+
+    // Landing register form
+    var landingRegForm = document.getElementById('landing-register-form');
+    if (landingRegForm) {
+        landingRegForm.addEventListener('submit', async function(e) {
+            e.preventDefault();
+            var btn = e.target.querySelector('button');
+            var html = btn.innerHTML;
+            btn.innerHTML = '<div class="loader"></div>';
+            btn.disabled = true;
+            try {
+                var res = await fetch('/api/register', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        username: document.getElementById('landing-username').value,
+                        password: document.getElementById('landing-password').value
+                    })
+                });
+                var data = await res.json();
+                if (data.success) {
+                    toast('Account created! Welcome to TuBlox!');
+                    setTimeout(function() { location.href = '/home'; }, 1000);
+                } else {
+                    toast(data.message, 'error');
+                }
+            } catch (err) {
+                toast('Connection error', 'error');
             }
-        } catch (err) {
-            toast('Connection error', 'error');
-        }
-        btn.innerHTML = html;
-        btn.disabled = false;
-    });
-}
+            btn.innerHTML = html;
+            btn.disabled = false;
+        });
+    }
 
     if (document.querySelector('.home-page')) {
         loadUser();
@@ -965,6 +1041,14 @@ if (landingRegForm) {
         if (logoutBtn4) logoutBtn4.addEventListener('click', logout);
     }
 
+    if (document.querySelector('.settings-page')) {
+        loadUser();
+    }
+
+    if (document.querySelector('.whitelist-page')) {
+        loadUser();
+    }
+
     document.querySelectorAll('.modal-backdrop').forEach(function (el) {
         el.onclick = function () {
             var modal = el.closest('.modal');
@@ -994,3 +1078,4 @@ window.loadGameServers = loadGameServers;
 window.logout = logout;
 window.joinPlayerGame = joinPlayerGame;
 window.loadProfile = loadProfile;
+window.toast = toast;

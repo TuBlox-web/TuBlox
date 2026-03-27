@@ -3,59 +3,66 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TuBlox</title>
+    <title>TuBlox — Sign In</title>
     <link rel="stylesheet" href="/css/style.css">
 </head>
 <body>
     <div class="auth-page">
-        <div class="card auth-card">
-            <div class="auth-header">
-                <a href="/" class="logo">
-                    <img src="/img/logo.svg" alt="TuBlox">
-                    <span>TuBlox</span>
-                </a>
-                <h1>Welcome</h1>
-                <p>Sign in to continue</p>
+        <div class="auth-bg">
+            <img src="/assets/images/preview.png" alt="">
+            <div class="auth-bg-overlay"></div>
+        </div>
+
+        <div class="auth-container">
+            <div class="card auth-card">
+                <div class="auth-header">
+                    <a href="/" class="logo">
+                        <img src="/img/logo.svg" alt="TuBlox">
+                        <span>TuBlox</span>
+                    </a>
+                    <h1>Welcome back</h1>
+                    <p>Sign in to start playing</p>
+                </div>
+
+                <div class="auth-tabs">
+                    <button class="auth-tab active" data-tab="login">Sign In</button>
+                    <button class="auth-tab" data-tab="register">Sign Up</button>
+                </div>
+
+                <form id="login-form" class="auth-form active">
+                    <div class="form-group">
+                        <label class="form-label">Username</label>
+                        <input type="text" id="login-username" class="form-input" placeholder="your_username" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Password</label>
+                        <input type="password" id="login-password" class="form-input" placeholder="••••••••" required>
+                    </div>
+                    <button type="submit" class="btn btn-primary" style="width:100%">Sign In</button>
+                </form>
+
+                <form id="register-form" class="auth-form">
+                    <div class="form-group">
+                        <label class="form-label">Username</label>
+                        <input type="text" id="reg-username" class="form-input" placeholder="choose_username" required minlength="3" maxlength="20">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Password</label>
+                        <input type="password" id="reg-password" class="form-input" placeholder="min 6 characters" required minlength="6">
+                    </div>
+                    <button type="submit" class="btn btn-primary" style="width:100%">Create Account</button>
+                </form>
+
+                <div class="auth-footer">
+                    <a href="/" class="btn btn-ghost">
+                        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <line x1="19" y1="12" x2="5" y2="12"/>
+                            <polyline points="12 19 5 12 12 5"/>
+                        </svg>
+                        Back to Home
+                    </a>
+                </div>
             </div>
-
-            <div class="auth-tabs">
-                <button class="auth-tab active" data-tab="login">Sign In</button>
-                <button class="auth-tab" data-tab="register">Sign Up</button>
-            </div>
-
-            <form id="login-form" class="auth-form active">
-                <div class="form-group">
-                    <label class="form-label">Username</label>
-                    <input type="text" id="login-username" class="form-input" placeholder="your_username" required>
-                </div>
-                <div class="form-group">
-                    <label class="form-label">Password</label>
-                    <input type="password" id="login-password" class="form-input" placeholder="••••••••" required>
-                </div>
-                <button type="submit" class="btn btn-primary" style="width:100%">Sign In</button>
-            </form>
-
-            <form id="register-form" class="auth-form">
-                <div class="form-group">
-                    <label class="form-label">Username</label>
-                    <input type="text" id="reg-username" class="form-input" placeholder="choose_username" required minlength="3" maxlength="20">
-                </div>
-                <div class="form-group">
-                    <label class="form-label">Password</label>
-                    <input type="password" id="reg-password" class="form-input" placeholder="min 6 characters" required minlength="6">
-                </div>
-                <button type="submit" class="btn btn-primary" style="width:100%">Create Account</button>
-            </form>
-
-            <div class="auth-divider">or</div>
-
-            <a href="/" class="btn btn-ghost" style="width:100%">
-                <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <line x1="19" y1="12" x2="5" y2="12"/>
-                    <polyline points="12 19 5 12 12 5"/>
-                </svg>
-                Back
-            </a>
         </div>
     </div>
 

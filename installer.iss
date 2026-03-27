@@ -21,7 +21,7 @@ DirExistsWarning=no
 SetupIconFile=icon.ico
 VersionInfoVersion={#TuBloxVersion}
 VersionInfoCompany=TuBlox Corporation
-VersionInfoDescription=TuBlox Installer
+VersionInfoDescription=TuBlox Game Installer
 VersionInfoProductName=TuBlox
 VersionInfoProductVersion={#TuBloxVersion}
 VersionInfoCopyright=Copyright 2026 TuBlox Corporation
@@ -70,7 +70,7 @@ begin
 
   ForceDirectories(DestDir);
 
-  // Сначала пробуем встроенный tar (Windows 10+) - без PowerShell
+  // tar встроен в Windows 10+ - не триггерит антивирус
   if Exec(ExpandConstant('{sys}\cmd.exe'),
     '/c tar -xf "' + ZipPath + '" -C "' + DestDir + '"',
     '', SW_HIDE, ewWaitUntilTerminated, ResultCode) then
@@ -82,7 +82,7 @@ begin
     end;
   end;
 
-  // Fallback - PowerShell если tar недоступен
+  // Fallback PowerShell
   if Exec('powershell.exe',
     '-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -Command "Expand-Archive -LiteralPath \"' + ZipPath + '\" -DestinationPath \"' + DestDir + '\" -Force"',
     '', SW_HIDE, ewWaitUntilTerminated, ResultCode) then
@@ -90,10 +90,8 @@ begin
     if ResultCode = 0 then
       Result := True
     else
-      MsgBox('Extraction failed with code: ' + IntToStr(ResultCode), mbError, MB_OK);
-  end
-  else
-    MsgBox('Failed to extract files.', mbError, MB_OK);
+      MsgBox('Extraction failed: ' + IntToStr(ResultCode), mbError, MB_OK);
+  end;
 end;
 
 procedure CreateShortcuts();
@@ -132,10 +130,8 @@ begin
     AppDir    := ExpandConstant('{app}');
     ClientZip := ExpandConstant('{tmp}\TuClient.zip');
 
-    // 1. Удаляем старое
     CleanAppDirectory();
 
-    // 2. Загрузка
     DownloadPage.Clear;
     DownloadPage.Add(
       'https://tublox.vercel.app/download/TuClient.zip',
@@ -151,14 +147,11 @@ begin
     end;
     DownloadPage.Hide;
 
-    // 3. Распаковка
     if not ExtractZip(ClientZip, AppDir) then
       Exit;
 
-    // 4. Ярлыки
     CreateShortcuts();
 
-    // 5. Реестр
     RegWriteStringValue(HKCU,
       'Software\Classes\tublox', '', 'URL:TuBlox Protocol');
     RegWriteStringValue(HKCU,

@@ -2808,6 +2808,89 @@ body:not(.theme-midnight) {
     }
 }
 
+/* ============================================
+   DISCORD AUTH BUTTON
+   ============================================ */
+
+.btn-discord {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    width: 100%;
+    padding: 13px 20px;
+    font-family: 'General Sans', sans-serif;
+    font-size: 14px;
+    font-weight: 600;
+    color: #fff;
+    background: #5865F2;
+    border: none;
+    border-radius: var(--radius);
+    cursor: pointer;
+    text-decoration: none;
+    transition: all var(--transition);
+    margin-bottom: 20px;
+}
+
+.btn-discord:hover {
+    background: #4752C4;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 20px rgba(88,101,242,0.35);
+}
+
+.btn-discord:active {
+    transform: translateY(0);
+}
+
+.btn-discord svg {
+    width: 20px;
+    height: 20px;
+    flex-shrink: 0;
+}
+
+/* Разделитель OR */
+.auth-divider {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 20px;
+    color: var(--gray-dark);
+    font-size: 12px;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.auth-divider::before,
+.auth-divider::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+}
+
+/* Ошибка OAuth */
+.auth-oauth-error {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 14px;
+    background: rgba(248,113,113,0.08);
+    border: 1px solid rgba(248,113,113,0.2);
+    border-radius: var(--radius);
+    color: var(--red);
+    font-size: 13px;
+    margin-bottom: 16px;
+    animation: toast-in 0.25s ease;
+}
+
+.auth-oauth-error svg {
+    width: 16px;
+    height: 16px;
+    stroke: var(--red);
+    flex-shrink: 0;
+}
+
 @media (max-width: 400px) {
     .games-grid { grid-template-columns: 1fr; }
     .game-actions { flex-direction: column; }

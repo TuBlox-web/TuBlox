@@ -111,15 +111,20 @@ async function getNextReplyId() {
 }
 
 const userSchema = new mongoose.Schema({
-    odilId: { type: Number, unique: true },
-    username: { type: String, required: true, unique: true, minlength: 3, maxlength: 20, lowercase: true, trim: true },
-    password: { type: String, required: true },
-    createdAt: { type: Date, default: Date.now },
-    lastLogin: { type: Date, default: Date.now },
-    lastSeen: { type: Date, default: Date.now },
+    odilId:        { type: Number, unique: true },
+    username:      { type: String, required: true, unique: true, minlength: 3, maxlength: 20, lowercase: true, trim: true },
+    password:      { type: String, required: true },
+    
+    // ← ДОБАВЬ ЭТИ ДВЕ СТРОКИ
+    discordId:     { type: String, unique: true, sparse: true, default: null },
+    discordAvatar: { type: String, default: null },
+    
+    createdAt:  { type: Date, default: Date.now },
+    lastLogin:  { type: Date, default: Date.now },
+    lastSeen:   { type: Date, default: Date.now },
     gameData: {
-        level: { type: Number, default: 1 },
-        coins: { type: Number, default: 0 },
+        level:    { type: Number, default: 1 },
+        coins:    { type: Number, default: 0 },
         playTime: { type: Number, default: 0 }
     }
 });
@@ -497,6 +502,112 @@ app.post('/api/logout', async (req, res) => {
     } catch (e) {}
     res.clearCookie('token');
     res.json({ success: true });
+});
+
+// ═══════════════════════════════════════════════════════════════
+// API - DISCORD OAuth2
+// ═══════════════════════════════════════════════════════════════
+
+app.get('/api/auth/discord', (req, res) => {
+    const clientId = process.env.DISCORD_CLIENT_ID;
+    const redirectUri = encodeURIComponent(process.env.DISCORD_REDIRECT_URI);
+    const scope = encodeURIComponent('identify');
+    
+    res.redirect(
+        `https://discord.com/api/oauth2/authorize` +
+        `?client_id=${clientId}` +
+        `&redirect_uri=${redirectUri}` +
+        `&response_type=code` +
+        `&scope=${scope}`
+    );
+});
+
+app.get('/api/auth/discord/callback', async (req, res) => {
+    const { code, error } = req.query;
+    
+    if (error || !code) return res.redirect('/auth?error=discord_denied');
+    
+    try {
+        // Обменять code на токен
+        const tokenRes = await fetch('https://discord.com/api/oauth2/token', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: new URLSearchParams({
+                client_id:     process.env.DISCORD_CLIENT_ID,
+                client_secret: process.env.DISCORD_CLIENT_SECRET,
+                grant_type:    'authorization_code',
+                code,
+                redirect_uri:  process.env.DISCORD_REDIRECT_URI
+            })
+        });
+        
+        const tokenData = await tokenRes.json();
+        if (!tokenData.access_token) return res.redirect('/auth?error=token_failed');
+        
+        // Получить данные пользователя Discord
+        const userRes = await fetch('https://discord.com/api/users/@me', {
+            headers: { Authorization: `Bearer ${tokenData.access_token}` }
+        });
+        
+        const discordUser = await userRes.json();
+        if (!discordUser.id) return res.redirect('/auth?error=user_failed');
+        
+        // Аватар Discord
+        const discordAvatar = discordUser.avatar
+            ? `https://cdn.discordapp.com/avatars/${discordUser.id}/${discordUser.avatar}.png`
+            : null;
+        
+        // Ищем пользователя по discordId
+        let user = await User.findOne({ discordId: discordUser.id });
+        
+        if (user) {
+            // Уже зарегистрирован — просто обновляем аватар
+            user.lastLogin = new Date();
+            user.lastSeen  = new Date();
+            if (discordAvatar) user.discordAvatar = discordAvatar;
+            await user.save();
+        } else {
+            // Новый пользователь
+            // Чистим имя из Discord
+            let username = (discordUser.username || 'user')
+                .toLowerCase()
+                .replace(/[^a-z0-9_]/g, '_')
+                .substring(0, 16);
+            
+            // Если имя занято — добавляем цифры
+            const taken = await User.findOne({ username });
+            if (taken) username = username.substring(0, 12) + '_' + Math.floor(Math.random() * 9999);
+            
+            const odilId = await getNextUserId();
+            
+            user = new User({
+                odilId,
+                username,
+                password:      await bcrypt.hash(crypto.randomBytes(32).toString('hex'), 10),
+                discordId:     discordUser.id,
+                discordAvatar: discordAvatar,
+                lastSeen:      new Date()
+            });
+            await user.save();
+            
+            console.log(`[Discord] New user: ${username} #${odilId}`);
+        }
+        
+        // Создаём JWT сессию
+        const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: '7d' });
+        res.cookie('token', token, {
+            httpOnly: true,
+            maxAge:   7 * 24 * 60 * 60 * 1000,
+            sameSite: 'lax',
+            secure:   true
+        });
+        
+        res.redirect('/home');
+        
+    } catch (err) {
+        console.error('[Discord OAuth]', err);
+        res.redirect('/auth?error=server_error');
+    }
 });
 
 // ═══════════════════════════════════════════════════════════════

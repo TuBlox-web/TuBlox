@@ -1048,6 +1048,25 @@ document.addEventListener('DOMContentLoaded', function () {
     if (document.querySelector('.whitelist-page')) {
         loadUser();
     }
+// Показываем ошибку Discord OAuth если есть
+if (document.querySelector('.auth-page')) {
+    var params = new URLSearchParams(window.location.search);
+    var oauthError = params.get('error');
+    var errorEl = document.getElementById('oauth-error');
+    
+    if (oauthError && errorEl) {
+        var errorMessages = {
+            'discord_denied': 'You cancelled Discord login.',
+            'token_failed':   'Discord login failed. Please try again.',
+            'user_failed':    'Could not get Discord user data.',
+            'server_error':   'Server error. Please try again.',
+            'no_code':        'Invalid Discord response.'
+        };
+        
+        errorEl.textContent = errorMessages[oauthError] || 'Login error: ' + oauthError;
+        errorEl.style.display = 'block';
+    }
+}
 
     document.querySelectorAll('.modal-backdrop').forEach(function (el) {
         el.onclick = function () {

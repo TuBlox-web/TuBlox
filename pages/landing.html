@@ -7,8 +7,6 @@
     <link rel="stylesheet" href="/css/style.css">
 </head>
 <body>
-
-    <!-- HERO -->
     <section class="landing-hero">
         <div class="landing-hero-bg">
             <img src="/assets/images/preview.png" alt="">
@@ -22,58 +20,77 @@
                     <span>TuBlox</span>
                 </a>
                 <div class="landing-nav-links">
-                    <a href="/games">Play</a>
-                    <a href="/users">Users</a>
+                    <a href="/games">Games</a>
+                    <a href="/users">Players</a>
+                    <a href="/TuForums">Forums</a>
                 </div>
             </div>
             <div class="landing-nav-right">
-                <a href="/auth" class="nav-link-login">Login</a>
+                <a href="/auth" class="nav-link-login">Sign In</a>
                 <a href="/auth" class="btn btn-accent btn-sm">Register</a>
             </div>
         </nav>
 
         <div class="landing-hero-content">
             <div class="landing-hero-left">
-                <h1>Join a TuBlox</h1>
-                <p>In TuBlox you can play other users' projects, you can also play with friends using the TuSockets (web-sockets) system.</p>
+                <div class="landing-hero-eyebrow">Early Beta</div>
+                <h1>Play Games.<br>Build Worlds.<br><span>Join TuBlox.</span></h1>
+                <p>Play user-made games with real-time multiplayer powered by TuSockets.</p>
                 <div class="landing-hero-buttons">
-                    <a href="#features" class="btn btn-outline btn-lg">Learn more</a>
+                    <a href="#features" class="btn btn-outline btn-lg">Learn More</a>
+                    <a href="/auth" class="btn btn-accent btn-lg">Get Started</a>
                 </div>
             </div>
+
             <div class="landing-hero-right">
                 <div class="landing-register-card">
-                    <h2>Create a FREE account to join the fun!</h2>
+                    <h2>Create an Account</h2>
+                    <p>Join the community and start playing</p>
                     <form id="landing-register-form" class="landing-register-form">
                         <div class="landing-input-wrap">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-                            <input type="text" id="landing-username" placeholder="Username" required minlength="3" maxlength="20">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                                <circle cx="12" cy="7" r="4"/>
+                            </svg>
+                            <input type="text" id="landing-username" placeholder="Username"
+                                   required minlength="3" maxlength="20" autocomplete="off">
                         </div>
                         <div class="landing-input-wrap">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-                            <input type="password" id="landing-password" placeholder="Password" required minlength="6">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <rect x="3" y="11" width="18" height="11" rx="2"/>
+                                <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                            </svg>
+                            <input type="password" id="landing-password" placeholder="Password"
+                                   required minlength="6">
                         </div>
                         <button type="submit" class="btn btn-play btn-lg">
-                            <svg viewBox="0 0 24 24" fill="currentColor" style="width:18px;height:18px;"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                            <svg viewBox="0 0 24 24" fill="currentColor"
+                                 style="width:17px;height:17px;">
+                                <polygon points="5 3 19 12 5 21 5 3"/>
+                            </svg>
                             Play
                         </button>
                     </form>
-                    <p class="landing-register-login">Already have an account? <a href="/auth">Login</a></p>
+                    <p class="landing-register-login">
+                        Already have an account? <a href="/auth">Sign In</a>
+                    </p>
                 </div>
             </div>
         </div>
     </section>
 
-    <!-- FEATURES -->
     <section class="landing-features" id="features">
 
         <div class="landing-feature">
             <div class="landing-feature-text">
-                <h2><span class="text-green">Play</span> unique projects made by the users.</h2>
-                <p>Play other users' projects online.</p>
+                <h2>Play games built by<br><span class="text-green">the community</span></h2>
+                <p>Discover and play unique projects created by other players.</p>
             </div>
             <div class="landing-feature-visual">
                 <div class="feature-icon-large">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                        <polygon points="5 3 19 12 5 21 5 3"/>
+                    </svg>
                 </div>
             </div>
         </div>
@@ -81,32 +98,44 @@
         <div class="landing-feature reverse">
             <div class="landing-feature-visual">
                 <div class="feature-icon-large">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                        <circle cx="12" cy="12" r="10"/>
+                        <line x1="2" y1="12" x2="22" y2="12"/>
+                        <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10
+                                 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+                    </svg>
                 </div>
             </div>
             <div class="landing-feature-text">
-                <h2><span class="text-red">Multiplayer</span> powered by TuSockets.</h2>
-                <p>Play together with friends in real-time using our WebSocket-based multiplayer system.</p>
+                <h2>Real-time <span class="text-green">multiplayer</span><br>with TuSockets</h2>
+                <p>Play together with friends using our WebSocket-based multiplayer system.</p>
             </div>
         </div>
 
     </section>
 
-    <!-- CTA -->
     <section class="landing-cta">
         <div class="landing-cta-inner">
-            <span class="landing-cta-star">⭐</span>
-            <h2>Start your journey today</h2>
-            <a href="/auth" class="btn-cta">
+            <div class="landing-cta-icon">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
                     <circle cx="8.5" cy="7" r="4"/>
                     <line x1="20" y1="8" x2="20" y2="14"/>
                     <line x1="23" y1="11" x2="17" y2="11"/>
                 </svg>
-                Register
+            </div>
+            <h2>Start your journey today</h2>
+            <p>Join the TuBlox community and dive into player-made worlds.</p>
+            <a href="/auth" class="btn-cta">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                     style="width:17px;height:17px;">
+                    <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+                    <circle cx="8.5" cy="7" r="4"/>
+                    <line x1="20" y1="8" x2="20" y2="14"/>
+                    <line x1="23" y1="11" x2="17" y2="11"/>
+                </svg>
+                Create Account
             </a>
-            <p class="landing-cta-free">(It's free!)</p>
         </div>
     </section>
 

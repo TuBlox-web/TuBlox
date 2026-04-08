@@ -19,25 +19,50 @@
 
     <div class="home-page">
         <div class="home-content">
-            <!-- Welcome (built by JS) -->
-            <div class="welcome"></div>
 
-            <!-- Featured Game -->
-            <div class="section">
-                <div class="section-header">
-                    <h2>Featured Game</h2>
-                    <a href="/games" class="btn btn-ghost btn-sm">
-                        View All
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
-                    </a>
+            <!-- Welcome -->
+            <div class="welcome" id="welcome-block">
+                <div class="welcome-left">
+                    <h1>Welcome back, <span class="username">Player</span></h1>
+                    <p>ID: <strong class="odil-id">#0</strong></p>
                 </div>
-                <div class="featured-game-container" id="featured-game">
-                    <div class="loading-placeholder"><div class="spinner"></div></div>
+                <div class="welcome-stats">
+                    <div class="welcome-stat">
+                        <div class="welcome-stat-val" id="user-level">1</div>
+                        <div class="welcome-stat-label">Level</div>
+                    </div>
+                    <div class="welcome-stat">
+                        <div class="welcome-stat-val" id="user-playtime">0h</div>
+                        <div class="welcome-stat-label">Played</div>
+                    </div>
                 </div>
             </div>
+
+            <!-- Games -->
+            <div class="section">
+                <div class="section-header">
+                    <h2>Games</h2>
+                </div>
+                <div class="games-grid" id="home-games-grid">
+                    <div class="loading-placeholder">
+                        <div class="spinner"></div>
+                    </div>
+                </div>
+                <div id="home-show-more-wrap" style="display:none; text-align:center; margin-top:20px;">
+                    <button class="btn btn-outline" id="home-show-more-btn" onclick="homeShowMore()">
+                        Show More
+                    </button>
+                </div>
+            </div>
+
         </div>
     </div>
-
+    <!-- Three.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/FBXLoader.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/fflate@0.4.8/umd/index.js"></script>
+    
     <script src="/js/main.js"></script>
+    <script src="/js/player-model.js"></script>
 </body>
 </html>

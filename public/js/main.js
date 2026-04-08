@@ -1,13 +1,17 @@
 console.clear();
 
-let currentUser = null;
+let currentUser        = null;
 let currentLaunchGameId = null;
 let currentGameServers = [];
-let heartbeatInterval = null;
+let heartbeatInterval  = null;
 let profileRefreshInterval = null;
 
+var homeAllGames   = [];
+var homeShownCount = 0;
+var HOME_PAGE_SIZE = 6;
+
 // ============================================
-// NAVIGATION BUILDER
+// NAVIGATION
 // ============================================
 
 function buildNavigation() {
@@ -22,11 +26,11 @@ function buildNavigation() {
     var path = window.location.pathname;
 
     var navItems = [
-        { href: '/home',      label: 'Home',    match: ['/home'] },
-        { href: '/games',     label: 'Games',   match: ['/games', '/game/'] },
-        { href: '/TuForums',  label: 'Forums',  match: ['/TuForums', '/forum-post', '/forum-user'] },
-        { href: '/users',     label: 'Players', match: ['/users', '/user/'] },
-        { href: '/settings',  label: 'Settings',match: ['/settings'] }
+        { href: '/home',     label: 'Home',     match: ['/home'] },
+        { href: '/games',    label: 'Games',    match: ['/games', '/game/'] },
+        { href: '/TuForums', label: 'Forums',   match: ['/TuForums', '/forum-post', '/forum-user'] },
+        { href: '/users',    label: 'Players',  match: ['/users', '/user/'] },
+        { href: '/settings', label: 'Settings', match: ['/settings'] }
     ];
 
     navItems.forEach(function(item) {
@@ -34,60 +38,36 @@ function buildNavigation() {
         a.href = item.href;
         a.className = 'btn btn-ghost';
         a.textContent = item.label;
-
         var isActive = item.match.some(function(m) {
             return m.endsWith('/') ? path.startsWith(m) : path === m;
         });
         if (isActive) a.classList.add('active');
-
         navRight.appendChild(a);
     });
 
-    // User avatar chip on right
     if (currentUser) {
         _appendUserChip(navRight);
     } else {
-        fetch('/api/user').then(function(r){ return r.json(); }).then(function(data){
+        fetch('/api/user').then(function(r) { return r.json(); }).then(function(data) {
             if (data.success) {
                 currentUser = data.user;
                 _appendUserChip(navRight);
             }
-        }).catch(function(){});
+        }).catch(function() {});
     }
 }
 
 function _appendUserChip(navRight) {
-    // Check if chip already exists
     if (navRight.querySelector('.nav-user-chip')) return;
-
     var chip = document.createElement('div');
     chip.className = 'nav-user-chip';
     chip.innerHTML =
         '<div class="nav-user-avatar" id="nav-avatar"></div>' +
         '<span class="nav-user-name">' + escapeHtml(currentUser.username) + '</span>';
-
     chip.addEventListener('click', function() {
         window.location.href = '/user/' + currentUser.odilId;
     });
-
     navRight.appendChild(chip);
-}
-
-// Inject nav chip styles
-function injectNavStyles() {
-    if (document.getElementById('nav-extra-css')) return;
-    var s = document.createElement('style');
-    s.id = 'nav-extra-css';
-    s.textContent =
-        '.nav-right .btn-ghost.active{color:var(--white);background:rgba(255,255,255,0.08);}' +
-        '.nav-right .btn-ghost.active::after{content:"";position:absolute;bottom:-1px;left:50%;transform:translateX(-50%);width:20px;height:2px;background:var(--accent);border-radius:2px;}' +
-        '.nav-right .btn-ghost{position:relative;}' +
-        '.nav-user-chip{display:flex;align-items:center;gap:9px;padding:6px 12px 6px 6px;background:rgba(255,255,255,0.05);border:1px solid var(--border);border-radius:100px;cursor:pointer;margin-left:8px;transition:all .18s ease;}' +
-        '.nav-user-chip:hover{background:rgba(255,255,255,0.09);border-color:var(--border-light);}' +
-        '.nav-user-avatar{width:28px;height:28px;border-radius:50%;background:var(--bg-elevated);border:1px solid var(--border);overflow:hidden;flex-shrink:0;}' +
-        '.nav-user-avatar canvas{display:block;width:28px!important;height:28px!important;}' +
-        '.nav-user-name{font-size:13px;font-weight:600;color:var(--white);}';
-    document.head.appendChild(s);
 }
 
 // ============================================
@@ -102,9 +82,9 @@ function injectBadgeStyles() {
         '.profile-badge{position:relative;cursor:pointer;}' +
         '.profile-badge:hover{transform:translateY(-3px) scale(1.1);}' +
         '.profile-badge .profile-badge-img{width:52px;height:52px;background-size:contain;background-repeat:no-repeat;background-position:center;border-radius:10px;}' +
-        '.profile-badge::after{content:attr(data-tooltip);position:absolute;bottom:calc(100% + 8px);left:50%;transform:translateX(-50%) scale(.92);background:rgba(0,0,0,0.9);color:#fff;padding:5px 12px;border-radius:7px;font-size:12px;font-weight:600;white-space:nowrap;pointer-events:none;opacity:0;transition:opacity .18s,transform .18s;z-index:50;border:1px solid rgba(255,255,255,0.1);}' +
+        '.profile-badge::after{content:attr(data-tooltip);position:absolute;bottom:calc(100% + 8px);left:50%;transform:translateX(-50%) scale(.92);background:rgba(0,0,0,0.92);color:#fff;padding:5px 12px;border-radius:7px;font-size:12px;font-weight:600;white-space:nowrap;pointer-events:none;opacity:0;transition:opacity .18s,transform .18s;z-index:50;border:1px solid rgba(255,255,255,0.1);}' +
         '.profile-badge:hover::after{opacity:1;transform:translateX(-50%) scale(1);}' +
-        '.profile-badge::before{content:"";position:absolute;bottom:calc(100% + 2px);left:50%;transform:translateX(-50%);border:5px solid transparent;border-top-color:rgba(0,0,0,0.9);opacity:0;transition:opacity .18s;pointer-events:none;z-index:50;}' +
+        '.profile-badge::before{content:"";position:absolute;bottom:calc(100% + 2px);left:50%;transform:translateX(-50%);border:5px solid transparent;border-top-color:rgba(0,0,0,0.92);opacity:0;transition:opacity .18s;pointer-events:none;z-index:50;}' +
         '.profile-badge:hover::before{opacity:1;}' +
         '.profile-avatar-badges{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;}';
     document.head.appendChild(s);
@@ -129,16 +109,13 @@ function initTheme() {
 // ============================================
 
 (function setFavicon() {
-    ['link[rel="icon"]','link[rel="apple-touch-icon"]'].forEach(function(sel){
+    ['link[rel="icon"]', 'link[rel="apple-touch-icon"]'].forEach(function(sel) {
         var el = document.querySelector(sel);
         if (el) el.remove();
     });
     var l = document.createElement('link');
     l.rel = 'icon'; l.type = 'image/svg+xml'; l.href = '/img/logo.svg';
     document.head.appendChild(l);
-    var a = document.createElement('link');
-    a.rel = 'apple-touch-icon'; a.href = '/img/logo.svg';
-    document.head.appendChild(a);
 })();
 
 // ============================================
@@ -158,7 +135,7 @@ function toast(msg, type) {
         : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
     var el = document.createElement('div');
     el.className = 'toast ' + type;
-    el.innerHTML = icon + '<span>' + msg + '</span>';
+    el.innerHTML = icon + '<span>' + escapeHtml(msg) + '</span>';
     c.appendChild(el);
     setTimeout(function() {
         el.style.opacity = '0';
@@ -167,29 +144,44 @@ function toast(msg, type) {
 }
 
 function escapeHtml(text) {
-    if (!text) return '';
+    if (!text && text !== 0) return '';
     var d = document.createElement('div');
-    d.textContent = text;
+    d.textContent = String(text);
     return d.innerHTML;
 }
 
 function formatNumber(n) {
     if (!n) return '0';
-    if (n >= 1000000) return (n/1000000).toFixed(1) + 'M';
-    if (n >= 1000) return (n/1000).toFixed(1) + 'K';
-    return n.toString();
+    if (n >= 1000000) return (n / 1000000).toFixed(1) + 'M';
+    if (n >= 1000)    return (n / 1000).toFixed(1) + 'K';
+    return String(n);
 }
 
 function formatDate(dateStr) {
     if (!dateStr) return 'Unknown';
     var d = new Date(dateStr);
     if (isNaN(d.getTime())) return 'Unknown';
-    var months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    var months = ['Jan','Feb','Mar','Apr','May','Jun',
+                  'Jul','Aug','Sep','Oct','Nov','Dec'];
     return months[d.getMonth()] + ' ' + d.getDate() + ', ' + d.getFullYear();
 }
 
+function formatPlayTime(seconds) {
+    if (!seconds || seconds < 60) return '0h';
+    var hours = Math.floor(seconds / 3600);
+    var mins  = Math.floor((seconds % 3600) / 60);
+    if (hours === 0) return mins + 'm';
+    if (mins === 0)  return hours + 'h';
+    return hours + 'h ' + mins + 'm';
+}
+
 function gamePlaceholder() {
-    return '<div class="placeholder"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 12h4M8 10v4M14 10l4 4M14 14l4-4"/></svg></div>';
+    return '<div class="placeholder">' +
+        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">' +
+            '<rect x="2" y="6" width="20" height="12" rx="2"/>' +
+            '<path d="M6 12h4M8 10v4M14 10l4 4M14 14l4-4"/>' +
+        '</svg>' +
+    '</div>';
 }
 
 // ============================================
@@ -210,12 +202,12 @@ function initTabs() {
 
 async function register(e) {
     e.preventDefault();
-    var btn = e.target.querySelector('button[type="submit"]');
+    var btn  = e.target.querySelector('button[type="submit"]');
     var html = btn.innerHTML;
-    btn.innerHTML = '<div class="loader"></div> Creating...';
-    btn.disabled = true;
+    btn.innerHTML = '<div class="loader"></div>';
+    btn.disabled  = true;
     try {
-        var res = await fetch('/api/register', {
+        var res  = await fetch('/api/register', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -225,28 +217,28 @@ async function register(e) {
         });
         var data = await res.json();
         if (data.success) {
-            toast('Welcome to TuBlox! ID: #' + data.odilId);
+            toast('Account created. ID: #' + data.odilId);
             setTimeout(function() { location.href = '/home'; }, 900);
         } else {
             toast(data.message, 'error');
             btn.innerHTML = html;
-            btn.disabled = false;
+            btn.disabled  = false;
         }
-    } catch(err) {
+    } catch (err) {
         toast('Connection error', 'error');
         btn.innerHTML = html;
-        btn.disabled = false;
+        btn.disabled  = false;
     }
 }
 
 async function login(e) {
     e.preventDefault();
-    var btn = e.target.querySelector('button[type="submit"]');
+    var btn  = e.target.querySelector('button[type="submit"]');
     var html = btn.innerHTML;
-    btn.innerHTML = '<div class="loader"></div> Signing in...';
-    btn.disabled = true;
+    btn.innerHTML = '<div class="loader"></div>';
+    btn.disabled  = true;
     try {
-        var res = await fetch('/api/login', {
+        var res  = await fetch('/api/login', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -256,17 +248,17 @@ async function login(e) {
         });
         var data = await res.json();
         if (data.success) {
-            toast('Welcome back!');
+            toast('Welcome back');
             setTimeout(function() { location.href = '/home'; }, 700);
         } else {
             toast(data.message, 'error');
             btn.innerHTML = html;
-            btn.disabled = false;
+            btn.disabled  = false;
         }
-    } catch(err) {
+    } catch (err) {
         toast('Connection error', 'error');
         btn.innerHTML = html;
-        btn.disabled = false;
+        btn.disabled  = false;
     }
 }
 
@@ -275,12 +267,17 @@ async function logout() {
     location.href = '/';
 }
 
+// ============================================
+// LOAD USER
+// ============================================
+
 async function loadUser() {
     try {
-        var res = await fetch('/api/user');
+        var res  = await fetch('/api/user');
         var data = await res.json();
         if (data.success) {
             currentUser = data.user;
+
             document.querySelectorAll('.username').forEach(function(el) {
                 el.textContent = data.user.username;
             });
@@ -288,23 +285,15 @@ async function loadUser() {
                 el.textContent = '#' + data.user.odilId;
             });
 
-            // Update welcome section
-            var welcomeTitle = document.querySelector('.welcome-left h1');
-            if (welcomeTitle) {
-                welcomeTitle.innerHTML = 'Welcome back, <span class="username" style="color:var(--green)">' + escapeHtml(data.user.username) + '</span>';
-            }
+            var level    = document.getElementById('user-level');
+            var playtime = document.getElementById('user-playtime');
 
-            var level  = document.getElementById('user-level');
-            var coins  = document.getElementById('user-coins');
-            var time   = document.getElementById('user-playtime');
-            if (level)  level.textContent  = data.user.gameData.level;
-            if (coins)  coins.textContent  = data.user.gameData.coins;
-            if (time)   time.textContent   = Math.floor(data.user.gameData.playTime / 60) + 'h';
+            if (level)    level.textContent    = data.user.gameData.level;
+            if (playtime) playtime.textContent = formatPlayTime(data.user.gameData.playTime);
 
-            // Rebuild nav to add user chip
             buildNavigation();
         }
-    } catch(err) { console.error(err); }
+    } catch (err) { console.error(err); }
 }
 
 // ============================================
@@ -314,8 +303,13 @@ async function loadUser() {
 function gameCardHTML(game) {
     return '<div class="game-card" onclick="location.href=\'/game/' + game.id + '\'">' +
         '<div class="game-card-image">' +
-            (game.thumbnail ? '<img src="' + escapeHtml(game.thumbnail) + '" alt="' + escapeHtml(game.title) + '" loading="lazy">' : gamePlaceholder()) +
-            '<div class="game-card-players"><span class="dot"></span>' + (game.activePlayers || 0) + ' playing</div>' +
+            (game.thumbnail
+                ? '<img src="' + escapeHtml(game.thumbnail) + '" alt="' + escapeHtml(game.title) + '" loading="lazy">'
+                : gamePlaceholder()) +
+            '<div class="game-card-players">' +
+                '<span class="dot"></span>' +
+                escapeHtml(String(game.activePlayers || 0)) + ' playing' +
+            '</div>' +
         '</div>' +
         '<div class="game-card-info">' +
             '<div class="game-card-title">' + escapeHtml(game.title) + '</div>' +
@@ -324,64 +318,91 @@ function gameCardHTML(game) {
     '</div>';
 }
 
-function featuredGameHTML(game) {
-    return '<div class="featured-game" onclick="location.href=\'/game/' + game.id + '\'">' +
-        '<div class="featured-game-image">' +
-            (game.thumbnail ? '<img src="' + escapeHtml(game.thumbnail) + '" alt="' + escapeHtml(game.title) + '">' : gamePlaceholder()) +
-        '</div>' +
-        '<div class="featured-game-info">' +
-            '<div class="featured-game-badge">Featured</div>' +
-            '<h3 class="featured-game-title">' + escapeHtml(game.title) + '</h3>' +
-            '<p class="featured-game-desc">' + escapeHtml(game.description || 'No description') + '</p>' +
-            '<div class="featured-game-stats">' +
-                '<span><strong>' + (game.activePlayers || 0) + '</strong> playing</span>' +
-                '<span><strong>' + formatNumber(game.visits || 0) + '</strong> visits</span>' +
-            '</div>' +
-            '<button class="btn btn-primary" onclick="event.stopPropagation(); playGame(\'' + game.id + '\')">' +
-                '<svg viewBox="0 0 24 24" fill="currentColor" style="width:16px;height:16px;"><polygon points="5 3 19 12 5 21 5 3"/></svg> Play Now' +
-            '</button>' +
-        '</div>' +
-    '</div>';
-}
+// ============================================
+// HOME PAGE GAMES (with Show More)
+// ============================================
 
-async function loadFeaturedGame() {
-    var container = document.getElementById('featured-game');
+async function loadHomeGames() {
+    var container = document.getElementById('home-games-grid');
     if (!container) return;
+
     try {
-        var res = await fetch('/api/games?featured=true&limit=1');
+        var res  = await fetch('/api/games');
         var data = await res.json();
+
         if (data.success && data.games.length > 0) {
-            container.innerHTML = featuredGameHTML(data.games[0]);
+            homeAllGames   = data.games;
+            homeShownCount = 0;
+            container.innerHTML = '';
+            homeAppendGames();
         } else {
-            container.innerHTML = '<p class="no-content">No featured game</p>';
+            container.innerHTML =
+                '<div class="games-empty">' +
+                    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">' +
+                        '<rect x="2" y="6" width="20" height="12" rx="2"/>' +
+                        '<path d="M6 12h4M8 10v4M14 10l4 4M14 14l4-4"/>' +
+                    '</svg>' +
+                    '<h3>No Games Yet</h3>' +
+                    '<p>Check back soon</p>' +
+                '</div>';
         }
-    } catch(err) {
-        container.innerHTML = '<p class="no-content">Error loading</p>';
+    } catch (err) {
+        container.innerHTML = '<p class="no-content">Error loading games</p>';
     }
 }
+
+function homeAppendGames() {
+    var container = document.getElementById('home-games-grid');
+    if (!container) return;
+
+    var slice = homeAllGames.slice(homeShownCount, homeShownCount + HOME_PAGE_SIZE);
+    homeShownCount += slice.length;
+
+    slice.forEach(function(game) {
+        var tmp = document.createElement('div');
+        tmp.innerHTML = gameCardHTML(game);
+        container.appendChild(tmp.firstChild);
+    });
+
+    var wrap = document.getElementById('home-show-more-wrap');
+    if (wrap) {
+        wrap.style.display = homeShownCount < homeAllGames.length ? 'block' : 'none';
+    }
+}
+
+function homeShowMore() {
+    homeAppendGames();
+}
+
+// ============================================
+// GAMES PAGE (all)
+// ============================================
 
 async function loadAllGames() {
     var container = document.getElementById('all-games');
     if (!container) return;
     try {
-        var res = await fetch('/api/games');
+        var res  = await fetch('/api/games');
         var data = await res.json();
         if (data.success && data.games.length > 0) {
             container.innerHTML = data.games.map(gameCardHTML).join('');
         } else {
             container.innerHTML =
                 '<div class="games-empty">' +
-                    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 12h4M8 10v4M14 10l4 4M14 14l4-4"/></svg>' +
+                    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">' +
+                        '<rect x="2" y="6" width="20" height="12" rx="2"/>' +
+                        '<path d="M6 12h4M8 10v4M14 10l4 4M14 14l4-4"/>' +
+                    '</svg>' +
                     '<h3>No Games Yet</h3><p>Check back soon</p>' +
                 '</div>';
         }
-    } catch(err) {
+    } catch (err) {
         container.innerHTML = '<p class="no-content">Error loading games</p>';
     }
 }
 
 // ============================================
-// GAME PAGE
+// GAME PAGE (single)
 // ============================================
 
 async function loadGamePage() {
@@ -389,7 +410,7 @@ async function loadGamePage() {
     if (!container) return;
     var gameId = location.pathname.split('/').pop();
     try {
-        var res = await fetch('/api/game/' + gameId);
+        var res  = await fetch('/api/game/' + gameId);
         var data = await res.json();
         if (data.success) {
             var g = data.game;
@@ -397,36 +418,65 @@ async function loadGamePage() {
             container.innerHTML =
                 '<div class="game-hero">' +
                     '<div class="game-media">' +
-                        (g.thumbnail ? '<img src="' + escapeHtml(g.thumbnail) + '" alt="' + escapeHtml(g.title) + '">' : gamePlaceholder()) +
+                        (g.thumbnail
+                            ? '<img src="' + escapeHtml(g.thumbnail) + '" alt="' + escapeHtml(g.title) + '">'
+                            : gamePlaceholder()) +
                     '</div>' +
                     '<div class="game-sidebar">' +
                         '<div class="game-main-card">' +
                             '<h1 class="game-title">' + escapeHtml(g.title) + '</h1>' +
-                            '<p class="game-creator">by <a href="/user/' + g.creatorId + '">' + escapeHtml(g.creator) + '</a></p>' +
+                            '<p class="game-creator">by <a href="/user/' + escapeHtml(g.creatorId) + '">' + escapeHtml(g.creator) + '</a></p>' +
                             '<div class="game-stats">' +
-                                '<div class="game-stat"><div class="game-stat-value">' + (g.activePlayers||0) + '</div><div class="game-stat-label">Playing</div></div>' +
-                                '<div class="game-stat"><div class="game-stat-value">' + formatNumber(g.visits||0) + '</div><div class="game-stat-label">Visits</div></div>' +
-                                '<div class="game-stat"><div class="game-stat-value">' + (g.maxPlayers||50) + '</div><div class="game-stat-label">Max</div></div>' +
+                                '<div class="game-stat">' +
+                                    '<div class="game-stat-value">' + escapeHtml(String(g.activePlayers || 0)) + '</div>' +
+                                    '<div class="game-stat-label">Playing</div>' +
+                                '</div>' +
+                                '<div class="game-stat">' +
+                                    '<div class="game-stat-value">' + formatNumber(g.visits || 0) + '</div>' +
+                                    '<div class="game-stat-label">Visits</div>' +
+                                '</div>' +
+                                '<div class="game-stat">' +
+                                    '<div class="game-stat-value">' + escapeHtml(String(g.maxPlayers || 50)) + '</div>' +
+                                    '<div class="game-stat-label">Max</div>' +
+                                '</div>' +
                             '</div>' +
-                            '<button class="btn btn-accent play-button" onclick="playGame(\'' + g.id + '\')">' +
-                                '<svg viewBox="0 0 24 24" fill="currentColor" style="width:18px;height:18px;"><polygon points="5 3 19 12 5 21 5 3"/></svg> Play' +
+                            '<button class="btn btn-primary play-button" onclick="playGame(\'' + escapeHtml(g.id) + '\')">' +
+                                '<svg viewBox="0 0 24 24" fill="currentColor" style="width:18px;height:18px;">' +
+                                    '<polygon points="5 3 19 12 5 21 5 3"/>' +
+                                '</svg> Play' +
                             '</button>' +
                             '<div class="game-actions">' +
                                 '<button class="btn btn-secondary" onclick="openServersModal()">' +
-                                    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg> Servers' +
+                                    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;">' +
+                                        '<rect x="2" y="3" width="20" height="14" rx="2"/>' +
+                                        '<line x1="8" y1="21" x2="16" y2="21"/>' +
+                                        '<line x1="12" y1="17" x2="12" y2="21"/>' +
+                                    '</svg> Servers' +
                                 '</button>' +
-                                '<button class="btn btn-secondary" onclick="shareGame(\'' + g.id + '\')">' +
-                                    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg> Share' +
+                                '<button class="btn btn-secondary" onclick="shareGame(\'' + escapeHtml(g.id) + '\')">' +
+                                    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;">' +
+                                        '<path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/>' +
+                                        '<polyline points="16 6 12 2 8 6"/>' +
+                                        '<line x1="12" y1="2" x2="12" y2="15"/>' +
+                                    '</svg> Share' +
                                 '</button>' +
                             '</div>' +
                         '</div>' +
-                        '<div class="game-description"><h3>About</h3><p>' + escapeHtml(g.description || 'No description.') + '</p></div>' +
+                        '<div class="game-description">' +
+                            '<h3>About</h3>' +
+                            '<p>' + escapeHtml(g.description || 'No description.') + '</p>' +
+                        '</div>' +
                     '</div>' +
                 '</div>';
         } else {
-            container.innerHTML = '<div class="not-found"><h2>Game not found</h2><p>This game doesn\'t exist or was removed.</p><a href="/games" class="btn btn-secondary">Browse Games</a></div>';
+            container.innerHTML =
+                '<div class="not-found">' +
+                    '<h2>Game not found</h2>' +
+                    '<p>This game does not exist or was removed.</p>' +
+                    '<a href="/games" class="btn btn-secondary">Browse Games</a>' +
+                '</div>';
         }
-    } catch(err) {
+    } catch (err) {
         container.innerHTML = '<p class="no-content">Error loading game</p>';
     }
 }
@@ -446,15 +496,17 @@ function playGame(gameId) {
 }
 
 function setLaunchState(state) {
-    document.querySelectorAll('.launch-state').forEach(function(el) { el.classList.remove('active'); });
+    document.querySelectorAll('.launch-state').forEach(function(el) {
+        el.classList.remove('active');
+    });
     var el = document.getElementById('state-' + state);
     if (el) el.classList.add('active');
     var title = document.getElementById('modal-title');
     if (title) title.textContent = ({
         connecting: 'Launching Game',
-        success: 'Game Started',
-        notfound: 'Install Required',
-        error: 'Launch Failed'
+        success:    'Game Started',
+        notfound:   'Install Required',
+        error:      'Launch Failed'
     })[state] || 'Launching';
 }
 
@@ -470,14 +522,21 @@ function closePlayModal() {
 }
 
 function retryLaunch() {
-    if (currentLaunchGameId) { setLaunchState('connecting'); launchGame(currentLaunchGameId); }
+    if (currentLaunchGameId) {
+        setLaunchState('connecting');
+        launchGame(currentLaunchGameId);
+    }
 }
 
 function detectClientLaunch(launchUrl) {
     return new Promise(function(resolve) {
         var detected = false;
-        function onBlur() { if (!detected) { detected = true; cleanup(); resolve(true); } }
-        function onVis() { if (document.hidden && !detected) { detected = true; cleanup(); resolve(true); } }
+        function onBlur() {
+            if (!detected) { detected = true; cleanup(); resolve(true); }
+        }
+        function onVis() {
+            if (document.hidden && !detected) { detected = true; cleanup(); resolve(true); }
+        }
         function cleanup() {
             window.removeEventListener('blur', onBlur);
             document.removeEventListener('visibilitychange', onVis);
@@ -485,14 +544,16 @@ function detectClientLaunch(launchUrl) {
         window.addEventListener('blur', onBlur);
         document.addEventListener('visibilitychange', onVis);
         window.location.href = launchUrl;
-        setTimeout(function() { if (!detected) { cleanup(); resolve(false); } }, 3500);
+        setTimeout(function() {
+            if (!detected) { cleanup(); resolve(false); }
+        }, 3500);
     });
 }
 
 async function launchGame(gameId) {
     currentLaunchGameId = gameId;
     try {
-        var res = await fetch('/api/game/launch', {
+        var res  = await fetch('/api/game/launch', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ gameId: gameId })
@@ -504,37 +565,45 @@ async function launchGame(gameId) {
             if (errMsg) errMsg.textContent = data.message || 'Failed to create session';
             return;
         }
-        var gameName = data.gameName || 'TuBlox World';
+
+        var gameName    = data.gameName    || 'TuBlox World';
         var gameCreator = data.creatorName || '';
+
         if (!gameName || gameName === 'TuBlox World') {
             try {
                 var gr = await fetch('/api/game/' + gameId);
                 var gd = await gr.json();
-                if (gd.success && gd.game) { gameName = gd.game.title || gameName; gameCreator = gd.game.creator || gameCreator; }
-            } catch(e) {}
+                if (gd.success && gd.game) {
+                    gameName    = gd.game.title   || gameName;
+                    gameCreator = gd.game.creator || gameCreator;
+                }
+            } catch (e) {}
         }
+
         var launchData = {
-            username: currentUser.username,
-            odilId: currentUser.odilId,
-            host: data.wsHost || window.location.hostname,
-            port: data.wsPort || 3000,
-            gameId: gameId,
-            token: data.token,
-            gameName: gameName,
+            username:    currentUser.username,
+            odilId:      currentUser.odilId,
+            host:        data.wsHost || window.location.hostname,
+            port:        data.wsPort || 3000,
+            gameId:      gameId,
+            token:       data.token,
+            gameName:    gameName,
             creatorName: gameCreator,
             description: data.description || '',
-            maxPlayers: data.maxPlayers || 10
+            maxPlayers:  data.maxPlayers  || 10
         };
+
         var base64 = btoa(unescape(encodeURIComponent(JSON.stringify(launchData))))
-            .replace(/\+/g,'-').replace(/\//g,'_').replace(/=/g,'');
+            .replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+
         var found = await detectClientLaunch('tublox://play/' + base64);
         if (found) {
             setLaunchState('success');
-            setTimeout(function() { closePlayModal(); toast('Game launched! Have fun!'); }, 3000);
+            setTimeout(function() { closePlayModal(); toast('Game launched'); }, 3000);
         } else {
             setLaunchState('notfound');
         }
-    } catch(e) {
+    } catch (e) {
         setLaunchState('error');
         var errEl = document.getElementById('error-message');
         if (errEl) errEl.textContent = 'Connection error. Try again.';
@@ -543,7 +612,7 @@ async function launchGame(gameId) {
 
 function shareGame(gameId) {
     navigator.clipboard.writeText(location.origin + '/game/' + gameId)
-        .then(function() { toast('Link copied!'); })
+        .then(function()  { toast('Link copied'); })
         .catch(function() { toast('Could not copy', 'error'); });
 }
 
@@ -562,43 +631,106 @@ function closeServersModal() {
 }
 
 async function loadGameServers() {
-    var body = document.getElementById('servers-body');
+    var body   = document.getElementById('servers-body');
     if (!body) return;
     var gameId = location.pathname.split('/').pop();
-    body.innerHTML = '<div class="servers-loading"><div class="spinner"></div><p>Loading servers...</p></div>';
+
+    body.innerHTML =
+        '<div class="servers-loading"><div class="spinner"></div><p>Loading servers...</p></div>';
+
     try {
-        var res = await fetch('/api/game/' + gameId + '/servers');
+        var res  = await fetch('/api/game/' + gameId + '/servers');
         var data = await res.json();
         if (!data.success) throw new Error(data.message);
+
         currentGameServers = data.servers || [];
+
         if (!currentGameServers.length) {
             body.innerHTML =
                 '<div class="servers-empty">' +
-                    '<div class="servers-empty-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg></div>' +
+                    '<div class="servers-empty-icon">' +
+                        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">' +
+                            '<rect x="2" y="3" width="20" height="14" rx="2"/>' +
+                            '<line x1="8" y1="21" x2="16" y2="21"/>' +
+                            '<line x1="12" y1="17" x2="12" y2="21"/>' +
+                        '</svg>' +
+                    '</div>' +
                     '<h4>No Active Servers</h4>' +
-                    '<p>Be the first! Start a new server.</p>' +
-                    '<button class="btn btn-accent" onclick="closeServersModal();playGame(\'' + gameId + '\')">' +
-                        '<svg viewBox="0 0 24 24" fill="currentColor" style="width:14px;height:14px;"><polygon points="5 3 19 12 5 21 5 3"/></svg> Start Playing' +
+                    '<p>Be the first to start a server.</p>' +
+                    '<button class="btn btn-primary btn-sm" onclick="closeServersModal();playGame(\'' + escapeHtml(gameId) + '\')">' +
+                        '<svg viewBox="0 0 24 24" fill="currentColor" style="width:13px;height:13px;">' +
+                            '<polygon points="5 3 19 12 5 21 5 3"/>' +
+                        '</svg> Start Playing' +
                     '</button>' +
                 '</div>';
             return;
         }
-        var html = '<div class="servers-refresh"><span class="servers-count">' + currentGameServers.length + ' server' + (currentGameServers.length!==1?'s':'') + ' online</span><button class="btn btn-secondary btn-refresh" onclick="loadGameServers()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10"/><path d="M20.49 15a9 9 0 0 1-14.85 3.36L1 14"/></svg> Refresh</button></div><div class="servers-list">';
+
+        var html =
+            '<div class="servers-refresh">' +
+                '<span class="servers-count">' +
+                    escapeHtml(String(currentGameServers.length)) +
+                    ' server' + (currentGameServers.length !== 1 ? 's' : '') + ' online' +
+                '</span>' +
+                '<button class="btn btn-secondary btn-refresh" onclick="loadGameServers()">' +
+                    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">' +
+                        '<path d="M23 4v6h-6"/>' +
+                        '<path d="M1 20v-6h6"/>' +
+                        '<path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10"/>' +
+                        '<path d="M20.49 15a9 9 0 0 1-14.85 3.36L1 14"/>' +
+                    '</svg> Refresh' +
+                '</button>' +
+            '</div>' +
+            '<div class="servers-list">';
+
         currentGameServers.forEach(function(srv) {
-            html += '<div class="server-item" onclick="joinServer(\'' + srv.id + '\')">' +
-                '<div class="server-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg></div>' +
-                '<div class="server-info"><div class="server-name">' + escapeHtml(srv.name) + '</div><div class="server-meta"><span class="server-players"><span class="dot"></span>' + srv.players + '/' + srv.maxPlayers + '</span>' + (srv.ping ? '<span class="server-ping">' + srv.ping + 'ms</span>' : '') + '</div></div>' +
-                '<button class="btn btn-primary server-join-btn btn-sm">Join</button>' +
-            '</div>';
+            html +=
+                '<div class="server-item" onclick="joinServer(\'' + escapeHtml(srv.id) + '\')">' +
+                    '<div class="server-icon">' +
+                        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">' +
+                            '<rect x="2" y="3" width="20" height="14" rx="2"/>' +
+                            '<line x1="8" y1="21" x2="16" y2="21"/>' +
+                            '<line x1="12" y1="17" x2="12" y2="21"/>' +
+                        '</svg>' +
+                    '</div>' +
+                    '<div class="server-info">' +
+                        '<div class="server-name">' + escapeHtml(srv.name) + '</div>' +
+                        '<div class="server-meta">' +
+                            '<span class="server-players">' +
+                                '<span class="dot"></span>' +
+                                escapeHtml(String(srv.players)) + '/' + escapeHtml(String(srv.maxPlayers)) +
+                            '</span>' +
+                            (srv.ping ? '<span class="server-ping">' + escapeHtml(String(srv.ping)) + 'ms</span>' : '') +
+                        '</div>' +
+                    '</div>' +
+                    '<button class="btn btn-primary server-join-btn btn-sm">Join</button>' +
+                '</div>';
         });
+
         html += '</div>';
         body.innerHTML = html;
-    } catch(err) {
-        body.innerHTML = '<div class="servers-empty"><div class="servers-empty-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg></div><h4>Load Failed</h4><p>Could not fetch servers.</p><button class="btn btn-secondary btn-sm" onclick="loadGameServers()">Retry</button></div>';
+
+    } catch (err) {
+        body.innerHTML =
+            '<div class="servers-empty">' +
+                '<div class="servers-empty-icon">' +
+                    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">' +
+                        '<circle cx="12" cy="12" r="10"/>' +
+                        '<line x1="12" y1="8" x2="12" y2="12"/>' +
+                        '<line x1="12" y1="16" x2="12.01" y2="16"/>' +
+                    '</svg>' +
+                '</div>' +
+                '<h4>Failed to Load</h4>' +
+                '<p>Could not fetch servers.</p>' +
+                '<button class="btn btn-secondary btn-sm" onclick="loadGameServers()">Retry</button>' +
+            '</div>';
     }
 }
 
-function joinServer(serverId) { closeServersModal(); playGame(serverId); }
+function joinServer(serverId) {
+    closeServersModal();
+    playGame(serverId);
+}
 
 // ============================================
 // USERS
@@ -608,24 +740,26 @@ async function loadUsers() {
     var grid = document.getElementById('users-grid');
     if (!grid) return;
     try {
-        var res = await fetch('/api/users');
+        var res  = await fetch('/api/users');
         var data = await res.json();
         if (data.success && data.users.length > 0) {
             grid.innerHTML = data.users.map(function(u) {
                 var statusClass = u.currentGame ? 'in-game' : (u.isOnline ? 'online' : 'offline');
                 return '<div class="user-card" onclick="location.href=\'/user/' + u.odilId + '\'">' +
-                    '<div class="user-avatar"><span class="user-status-dot ' + statusClass + '"></span></div>' +
+                    '<div class="user-avatar">' +
+                        '<span class="user-status-dot ' + statusClass + '"></span>' +
+                    '</div>' +
                     '<div class="user-info">' +
                         '<div class="user-name">' + escapeHtml(u.username) + '</div>' +
-                        '<div class="user-id">#' + u.odilId + '</div>' +
+                        '<div class="user-id">#' + escapeHtml(String(u.odilId)) + '</div>' +
                     '</div>' +
-                    '<div class="user-level">Lv.' + u.gameData.level + '</div>' +
+                    '<div class="user-level">Lv.' + escapeHtml(String(u.gameData.level)) + '</div>' +
                 '</div>';
             }).join('');
         } else {
             grid.innerHTML = '<p class="no-content">No players yet</p>';
         }
-    } catch(err) {
+    } catch (err) {
         grid.innerHTML = '<p class="no-content">Error loading players</p>';
     }
 }
@@ -637,71 +771,106 @@ async function loadUsers() {
 function buildProfileHTML(u) {
     var badgesHtml = '';
     if (u.badges && u.badges.length > 0) {
-        badgesHtml = '<div class="profile-avatar-badges">' +
+        badgesHtml =
+            '<div class="profile-avatar-badges">' +
             u.badges.map(function(badge) {
-                return '<div class="profile-badge badge-' + escapeHtml(badge.id) + '" data-tooltip="' + escapeHtml(getBadgeTooltip(badge.id)) + '">' +
-                    '<div class="profile-badge-img" style="background-image:url(\'' + escapeHtml(badge.icon) + '\')"></div>' +
+                return '<div class="profile-badge badge-' + escapeHtml(badge.id) + '" ' +
+                    'data-tooltip="' + escapeHtml(getBadgeTooltip(badge.id)) + '">' +
+                    '<div class="profile-badge-img" style="background-image:url(\'' +
+                        escapeHtml(badge.icon) + '\')"></div>' +
                 '</div>';
             }).join('') +
-        '</div>';
+            '</div>';
     }
 
     var playingHtml = '';
     if (u.currentGame) {
         var game = u.currentGame;
-        playingHtml = '<div class="profile-playing">' +
-            '<div class="profile-playing-thumb">' +
-                (game.thumbnail ? '<img src="' + escapeHtml(game.thumbnail) + '" alt="" style="width:44px;height:44px;border-radius:8px;object-fit:cover;">' :
-                '<div style="width:44px;height:44px;border-radius:8px;background:var(--bg-elevated);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width:20px;height:20px;stroke:var(--gray-dark)"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 12h4M8 10v4M14 10l4 4M14 14l4-4"/></svg></div>') +
-            '</div>' +
-            '<div class="profile-playing-info" style="flex:1;min-width:0;">' +
-                '<div class="profile-playing-label" style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--gray);margin-bottom:3px;"><span class="playing-dot"></span>Playing Now</div>' +
-                '<div class="profile-playing-name" style="font-size:13px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + escapeHtml(game.title || 'Unknown') + '</div>' +
-            '</div>' +
-            '<button class="btn btn-accent btn-sm" onclick="joinPlayerGame(\'' + escapeHtml(game.gameId || game.serverId || '') + '\')">' +
-                '<svg viewBox="0 0 24 24" fill="currentColor" style="width:12px;height:12px;"><polygon points="5 3 19 12 5 21 5 3"/></svg> Join' +
-            '</button>' +
-        '</div>';
+        var thumb = game.thumbnail
+            ? '<img src="' + escapeHtml(game.thumbnail) + '" alt="" style="width:44px;height:44px;border-radius:8px;object-fit:cover;">'
+            : '<div style="width:44px;height:44px;border-radius:8px;background:var(--bg-elevated);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;">' +
+                '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width:18px;height:18px;stroke:var(--gray-dark)">' +
+                    '<rect x="2" y="6" width="20" height="12" rx="2"/>' +
+                    '<path d="M6 12h4M8 10v4M14 10l4 4M14 14l4-4"/>' +
+                '</svg>' +
+              '</div>';
+
+        playingHtml =
+            '<div class="profile-playing">' +
+                '<div class="profile-playing-thumb">' + thumb + '</div>' +
+                '<div style="flex:1;min-width:0;">' +
+                    '<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--gray);margin-bottom:3px;">' +
+                        '<span class="playing-dot"></span>Playing Now' +
+                    '</div>' +
+                    '<div style="font-size:13px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' +
+                        escapeHtml(game.title || 'Unknown') +
+                    '</div>' +
+                '</div>' +
+                '<button class="btn btn-primary btn-sm" onclick="joinPlayerGame(\'' +
+                    escapeHtml(game.gameId || game.serverId || '') + '\')">' +
+                    '<svg viewBox="0 0 24 24" fill="currentColor" style="width:12px;height:12px;">' +
+                        '<polygon points="5 3 19 12 5 21 5 3"/>' +
+                    '</svg> Join' +
+                '</button>' +
+            '</div>';
     }
 
     var lastSeenHtml;
     if (u.isOnline || u.currentGame) {
-        lastSeenHtml = '<span class="profile-info-value" style="color:var(--green);font-weight:700;">● Online</span>';
+        lastSeenHtml = '<span class="profile-info-value" style="color:var(--white);">Online</span>';
     } else {
         lastSeenHtml = '<span class="profile-info-value">' + formatDate(u.lastSeen) + '</span>';
     }
 
-    return '<div class="profile-avatar-frame">' +
-        '<div class="profile-frame-top">' +
-            '<div>' +
-                '<div class="profile-name">' + escapeHtml(u.username) + '</div>' +
-                '<div class="profile-id">#' + u.odilId + '</div>' +
+    return (
+        '<div class="profile-avatar-frame">' +
+            '<div class="profile-frame-top">' +
+                '<div>' +
+                    '<div class="profile-name">' + escapeHtml(u.username) + '</div>' +
+                    '<div class="profile-id">#' + escapeHtml(String(u.odilId)) + '</div>' +
+                '</div>' +
+            '</div>' +
+            '<div class="profile-avatar" id="profile-avatar-container"></div>' +
+            '<div class="profile-frame-bottom">' +
+                (badgesHtml || '<div></div>') +
             '</div>' +
         '</div>' +
-        '<div class="profile-avatar" id="profile-avatar-container"></div>' +
-        '<div class="profile-frame-bottom">' +
-            (badgesHtml || '<div></div>') +
-        '</div>' +
-    '</div>' +
 
-    playingHtml +
+        playingHtml +
 
-    '<div class="profile-info-card">' +
-        '<div class="profile-info-header">' +
-            '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>' +
-            '<span>Info</span>' +
-        '</div>' +
-        '<div class="profile-info-rows">' +
-            '<div class="profile-info-row">' +
-                '<span class="profile-info-label"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>Joined</span>' +
-                '<span class="profile-info-value">' + formatDate(u.createdAt) + '</span>' +
+        '<div class="profile-info-card">' +
+            '<div class="profile-info-header">' +
+                '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">' +
+                    '<circle cx="12" cy="12" r="10"/>' +
+                    '<line x1="12" y1="8" x2="12" y2="12"/>' +
+                    '<line x1="12" y1="16" x2="12.01" y2="16"/>' +
+                '</svg>' +
+                '<span>Info</span>' +
             '</div>' +
-            '<div class="profile-info-row" id="profile-lastseen-row">' +
-                '<span class="profile-info-label"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>Last seen</span>' +
-                lastSeenHtml +
+            '<div class="profile-info-rows">' +
+                '<div class="profile-info-row">' +
+                    '<span class="profile-info-label">' +
+                        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">' +
+                            '<rect x="3" y="4" width="18" height="18" rx="2"/>' +
+                            '<line x1="16" y1="2" x2="16" y2="6"/>' +
+                            '<line x1="8" y1="2" x2="8" y2="6"/>' +
+                            '<line x1="3" y1="10" x2="21" y2="10"/>' +
+                        '</svg>Joined' +
+                    '</span>' +
+                    '<span class="profile-info-value">' + formatDate(u.createdAt) + '</span>' +
+                '</div>' +
+                '<div class="profile-info-row" id="profile-lastseen-row">' +
+                    '<span class="profile-info-label">' +
+                        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">' +
+                            '<circle cx="12" cy="12" r="10"/>' +
+                            '<polyline points="12 6 12 12 16 14"/>' +
+                        '</svg>Last seen' +
+                    '</span>' +
+                    lastSeenHtml +
+                '</div>' +
             '</div>' +
-        '</div>' +
-    '</div>';
+        '</div>'
+    );
 }
 
 async function loadProfile() {
@@ -711,15 +880,20 @@ async function loadProfile() {
     content.innerHTML = '<div class="loading-placeholder large"><div class="spinner"></div></div>';
     injectBadgeStyles();
     try {
-        var res = await fetch('/api/user/' + id);
+        var res  = await fetch('/api/user/' + id);
         var data = await res.json();
         if (data.success) {
             content.innerHTML = buildProfileHTML(data.user);
             startProfileRefresh(id);
         } else {
-            content.innerHTML = '<div class="profile-not-found"><h2>User not found</h2><p>This player doesn\'t exist.</p><a href="/users" class="btn btn-secondary">Browse Players</a></div>';
+            content.innerHTML =
+                '<div class="profile-not-found">' +
+                    '<h2>User not found</h2>' +
+                    '<p>This player does not exist.</p>' +
+                    '<a href="/users" class="btn btn-secondary">Browse Players</a>' +
+                '</div>';
         }
-    } catch(err) {
+    } catch (err) {
         content.innerHTML = '<p class="no-content">Error loading profile</p>';
     }
 }
@@ -728,35 +902,35 @@ function startProfileRefresh(userId) {
     stopProfileRefresh();
     profileRefreshInterval = setInterval(async function() {
         try {
-            var res = await fetch('/api/user/' + userId);
+            var res  = await fetch('/api/user/' + userId);
             var data = await res.json();
             if (!data.success) return;
-            var u = data.user;
+            var u   = data.user;
             var row = document.getElementById('profile-lastseen-row');
             if (row) {
                 var labelEl = row.querySelector('.profile-info-label');
-                var lsVal;
-                if (u.isOnline || u.currentGame) {
-                    lsVal = '<span class="profile-info-value" style="color:var(--green);font-weight:700;">● Online</span>';
-                } else {
-                    lsVal = '<span class="profile-info-value">' + formatDate(u.lastSeen) + '</span>';
-                }
+                var lsVal   = (u.isOnline || u.currentGame)
+                    ? '<span class="profile-info-value" style="color:var(--white);">Online</span>'
+                    : '<span class="profile-info-value">' + formatDate(u.lastSeen) + '</span>';
                 if (labelEl) {
                     row.innerHTML = '';
                     row.appendChild(labelEl.cloneNode(true));
                     row.insertAdjacentHTML('beforeend', lsVal);
                 }
             }
-        } catch(e) {}
+        } catch (e) {}
     }, 5000);
 }
 
 function stopProfileRefresh() {
-    if (profileRefreshInterval) { clearInterval(profileRefreshInterval); profileRefreshInterval = null; }
+    if (profileRefreshInterval) {
+        clearInterval(profileRefreshInterval);
+        profileRefreshInterval = null;
+    }
 }
 
 function joinPlayerGame(gameId) {
-    if (!gameId) { toast('Cannot join', 'error'); return; }
+    if (!gameId) { toast('Cannot join this game', 'error'); return; }
     playGame(gameId);
 }
 
@@ -765,7 +939,7 @@ function joinPlayerGame(gameId) {
 // ============================================
 
 async function sendHeartbeat() {
-    try { await fetch('/api/heartbeat', { method: 'POST' }); } catch(e) {}
+    try { await fetch('/api/heartbeat', { method: 'POST' }); } catch (e) {}
 }
 
 function startHeartbeat() {
@@ -775,7 +949,10 @@ function startHeartbeat() {
 }
 
 function stopHeartbeat() {
-    if (heartbeatInterval) { clearInterval(heartbeatInterval); heartbeatInterval = null; }
+    if (heartbeatInterval) {
+        clearInterval(heartbeatInterval);
+        heartbeatInterval = null;
+    }
 }
 
 // ============================================
@@ -783,9 +960,9 @@ function stopHeartbeat() {
 // ============================================
 
 function createFooter() {
-    if (document.querySelector('.auth-page') ||
+    if (document.querySelector('.auth-page')     ||
         document.querySelector('.countdown-page') ||
-        document.querySelector('.landing-hero')) return;
+        document.querySelector('.landing-hero'))   return;
 
     var footer = document.createElement('footer');
     footer.className = 'site-footer';
@@ -793,51 +970,47 @@ function createFooter() {
         '<div class="footer-inner">' +
             '<div class="footer-cta">' +
                 '<a href="/whitelist" class="btn btn-outline btn-lg">' +
-                    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:18px;height:18px;"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg> Get Whitelisted' +
+                    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:18px;height:18px;">' +
+                        '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>' +
+                    '</svg> Get Whitelisted' +
                 '</a>' +
             '</div>' +
             '<div class="footer-main">' +
                 '<div class="footer-brand">' +
-                    '<a href="/home" class="logo"><img src="/img/logo.svg" alt="TuBlox"><span>TuBlox</span></a>' +
-                    '<p class="footer-copyright" style="margin-top:10px;">© 2025 TuBlox</p>' +
+                    '<a href="/home" class="logo">' +
+                        '<img src="/img/logo.svg" alt="TuBlox"><span>TuBlox</span>' +
+                    '</a>' +
+                    '<p class="footer-copyright">2025 TuBlox</p>' +
                 '</div>' +
                 '<div class="footer-links">' +
-                    '<div class="footer-column"><h4>Play</h4><ul>' +
-                        '<li><a href="/home">Home</a></li>' +
-                        '<li><a href="/games">Games</a></li>' +
-                        '<li><a href="/users">Players</a></li>' +
-                        '<li><a href="/TuForums">Forums</a></li>' +
-                    '</ul></div>' +
-                    '<div class="footer-column"><h4>Community</h4><ul>' +
-                        '<li><a href="https://discord.gg/fRRQy7pAHY" target="_blank" rel="noopener">' +
-                            '<svg viewBox="0 0 24 24" fill="currentColor" class="footer-icon"><path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028 14.09 14.09 0 0 0 1.226-1.994.076.076 0 0 0-.041-.106 13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.892.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03z"/></svg>' +
-                            ' Discord' +
-                        '</a></li>' +
-                    '</ul></div>' +
+                    '<div class="footer-column">' +
+                        '<h4>Navigate</h4>' +
+                        '<ul>' +
+                            '<li><a href="/home">Home</a></li>' +
+                            '<li><a href="/games">Games</a></li>' +
+                            '<li><a href="/users">Players</a></li>' +
+                            '<li><a href="/TuForums">Forums</a></li>' +
+                        '</ul>' +
+                    '</div>' +
+                    '<div class="footer-column">' +
+                        '<h4>Community</h4>' +
+                        '<ul>' +
+                            '<li>' +
+                                '<a href="https://discord.gg/fRRQy7pAHY" target="_blank" rel="noopener">' +
+                                    '<svg viewBox="0 0 24 24" fill="currentColor" class="footer-icon">' +
+                                        '<path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028 14.09 14.09 0 0 0 1.226-1.994.076.076 0 0 0-.041-.106 13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.892.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03z"/>' +
+                                    '</svg> Discord' +
+                                '</a>' +
+                            '</li>' +
+                        '</ul>' +
+                    '</div>' +
                 '</div>' +
             '</div>' +
-            '<div class="footer-bottom"><p>Made with ❤️ for the TuBlox community</p></div>' +
+            '<div class="footer-bottom">' +
+                '<p>TuBlox — built for the community</p>' +
+            '</div>' +
         '</div>';
     document.body.appendChild(footer);
-}
-
-// ============================================
-// HOME PAGE — improved welcome
-// ============================================
-
-function buildHomeWelcome() {
-    var welcome = document.querySelector('.welcome');
-    if (!welcome) return;
-    welcome.innerHTML =
-        '<div class="welcome-left">' +
-            '<h1>Welcome back, <span class="username" style="color:var(--green)">Player</span> 👋</h1>' +
-            '<p style="font-size:13px;color:var(--gray);margin-top:4px;">ID: <strong class="odil-id" style="color:var(--white)">#0</strong></p>' +
-        '</div>' +
-        '<div class="welcome-stats">' +
-            '<div class="welcome-stat"><div class="welcome-stat-val" id="user-level">1</div><div class="welcome-stat-label">Level</div></div>' +
-            '<div class="welcome-stat"><div class="welcome-stat-val" id="user-coins">0</div><div class="welcome-stat-label">Coins</div></div>' +
-            '<div class="welcome-stat"><div class="welcome-stat-val" id="user-playtime">0h</div><div class="welcome-stat-label">Played</div></div>' +
-        '</div>';
 }
 
 // ============================================
@@ -846,12 +1019,11 @@ function buildHomeWelcome() {
 
 document.addEventListener('DOMContentLoaded', function() {
     initTheme();
-    injectNavStyles();
     buildNavigation();
     startHeartbeat();
     createFooter();
 
-    // Auth page
+    // Auth tabs
     if (document.querySelector('.auth-tabs')) {
         initTabs();
         var regForm = document.getElementById('register-form');
@@ -860,18 +1032,18 @@ document.addEventListener('DOMContentLoaded', function() {
         if (logForm) logForm.addEventListener('submit', login);
     }
 
-    // OAuth error
+    // OAuth error display
     if (document.querySelector('.auth-page')) {
-        var params = new URLSearchParams(window.location.search);
+        var params     = new URLSearchParams(window.location.search);
         var oauthError = params.get('error');
-        var errorEl = document.getElementById('oauth-error');
+        var errorEl    = document.getElementById('oauth-error');
         if (oauthError && errorEl) {
             var messages = {
                 'discord_denied': 'You cancelled Discord login.',
-                'token_failed': 'Discord login failed. Please try again.',
-                'user_failed': 'Could not get Discord user data.',
-                'server_error': 'Server error. Please try again.',
-                'no_code': 'Invalid Discord response.'
+                'token_failed':   'Discord login failed. Please try again.',
+                'user_failed':    'Could not get Discord user data.',
+                'server_error':   'Server error. Please try again.',
+                'no_code':        'Invalid Discord response.'
             };
             var errTextEl = document.getElementById('oauth-error-text');
             if (errTextEl) errTextEl.textContent = messages[oauthError] || 'Login error: ' + oauthError;
@@ -879,17 +1051,17 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    // Landing register
+    // Landing register form
     var landingRegForm = document.getElementById('landing-register-form');
     if (landingRegForm) {
         landingRegForm.addEventListener('submit', async function(e) {
             e.preventDefault();
-            var btn = e.target.querySelector('button[type="submit"]');
+            var btn  = e.target.querySelector('button[type="submit"]');
             var html = btn.innerHTML;
             btn.innerHTML = '<div class="loader"></div>';
-            btn.disabled = true;
+            btn.disabled  = true;
             try {
-                var res = await fetch('/api/register', {
+                var res  = await fetch('/api/register', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -899,26 +1071,25 @@ document.addEventListener('DOMContentLoaded', function() {
                 });
                 var data = await res.json();
                 if (data.success) {
-                    toast('Welcome to TuBlox! 🎮');
+                    toast('Account created');
                     setTimeout(function() { location.href = '/home'; }, 900);
                 } else {
                     toast(data.message, 'error');
                     btn.innerHTML = html;
-                    btn.disabled = false;
+                    btn.disabled  = false;
                 }
-            } catch(err) {
+            } catch (err) {
                 toast('Connection error', 'error');
                 btn.innerHTML = html;
-                btn.disabled = false;
+                btn.disabled  = false;
             }
         });
     }
 
     // Home page
     if (document.querySelector('.home-page')) {
-        buildHomeWelcome();
         loadUser();
-        loadFeaturedGame();
+        loadHomeGames();
     }
 
     // Games page
@@ -979,15 +1150,16 @@ window.addEventListener('beforeunload', function() {
 });
 
 // Globals
-window.playGame        = playGame;
-window.shareGame       = shareGame;
-window.openServersModal= openServersModal;
-window.closeServersModal=closeServersModal;
-window.joinServer      = joinServer;
-window.closePlayModal  = closePlayModal;
-window.retryLaunch     = retryLaunch;
-window.loadGameServers = loadGameServers;
-window.logout          = logout;
-window.joinPlayerGame  = joinPlayerGame;
-window.loadProfile     = loadProfile;
-window.toast           = toast;
+window.playGame         = playGame;
+window.shareGame        = shareGame;
+window.openServersModal = openServersModal;
+window.closeServersModal= closeServersModal;
+window.joinServer       = joinServer;
+window.closePlayModal   = closePlayModal;
+window.retryLaunch      = retryLaunch;
+window.loadGameServers  = loadGameServers;
+window.logout           = logout;
+window.joinPlayerGame   = joinPlayerGame;
+window.loadProfile      = loadProfile;
+window.homeShowMore     = homeShowMore;
+window.toast            = toast;

@@ -1134,6 +1134,102 @@ app.get('/download/TuStudio.zip', (req, res) => {
 });
 
 // ═══════════════════════════════════════════════════════════════
+// API - ADMIN (delete user by username + badges)
+// ═══════════════════════════════════════════════════════════════
+
+app.delete('/api/admin/user/:username', adminAPI, async (req, res) => {
+    try {
+        const username = String(req.params.username || '').toLowerCase().trim();
+        if (!username) return res.status(400).json({ success: false, message: 'Username required' });
+
+        const user = await User.findOne({ username });
+        if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+
+        // Нельзя удалить админа (опционально)
+        if (ADMIN_IDS.includes(user.odilId)) {
+            return res.status(403).json({ success: false, message: 'Cannot delete admin user' });
+        }
+
+        const odilId = user.odilId;
+
+        // Чистим связанные данные (чтобы не оставлять мусор)
+        await Promise.allSettled([
+            Ban.deleteMany({ odilId }),
+            Whitelist.deleteMany({ odilId }),
+            LaunchToken.deleteMany({ odilId }),
+            ForumPost.deleteMany({ authorId: odilId }),
+            ForumReply.deleteMany({ authorId: odilId })
+        ]);
+
+        // Удаляем пользователя
+        await User.deleteOne({ _id: user._id });
+
+        // ВАЖНО: Counter НЕ трогаем — id дальше будут расти, ничего не ломается
+        res.json({ success: true, deleted: { username, odilId } });
+    } catch (err) {
+        console.error('[Admin Delete]', err);
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+});
+
+app.post('/api/admin/badge/grant', adminAPI, async (req, res) => {
+    try {
+        const username = String(req.body.username || '').toLowerCase().trim();
+        const badgeId  = String(req.body.badgeId  || '').trim();
+
+        if (!username || !badgeId) {
+            return res.status(400).json({ success: false, message: 'username and badgeId required' });
+        }
+        if (!BADGES[badgeId]) {
+            return res.status(400).json({ success: false, message: 'Unknown badgeId' });
+        }
+
+        const user = await User.findOneAndUpdate(
+            { username },
+            { $addToSet: { badges: badgeId } }, // addToSet чтобы не дублировалось
+            { new: true }
+        );
+        if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+
+        res.json({
+            success: true,
+            user: { username: user.username, odilId: user.odilId },
+            badges: getUserBadgesFromUser(user)
+        });
+    } catch (err) {
+        console.error('[Admin Badge Grant]', err);
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+});
+
+app.post('/api/admin/badge/revoke', adminAPI, async (req, res) => {
+    try {
+        const username = String(req.body.username || '').toLowerCase().trim();
+        const badgeId  = String(req.body.badgeId  || '').trim();
+
+        if (!username || !badgeId) {
+            return res.status(400).json({ success: false, message: 'username and badgeId required' });
+        }
+
+        const user = await User.findOneAndUpdate(
+            { username },
+            { $pull: { badges: badgeId } },
+            { new: true }
+        );
+        if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+
+        res.json({
+            success: true,
+            user: { username: user.username, odilId: user.odilId },
+            badges: getUserBadgesFromUser(user)
+        });
+    } catch (err) {
+        console.error('[Admin Badge Revoke]', err);
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+});
+
+// ═══════════════════════════════════════════════════════════════
 // ERROR HANDLER
 // ═══════════════════════════════════════════════════════════════
 

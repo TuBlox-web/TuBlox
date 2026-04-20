@@ -22,6 +22,23 @@ function buildNavigation() {
     var navRight = document.querySelector('.nav-right');
     if (!navRight) return;
 
+   var logoSpan = document.querySelector('.navbar .logo span');
+    if (logoSpan) {
+        logoSpan.innerHTML = 'TuBlox <sup style="' +
+            'font-size:10px;' +
+            'font-weight:700;' +
+            'color:#2266FF;' +
+            'background:rgba(34,102,255,0.12);' +
+            'border:1px solid rgba(34,102,255,0.3);' +
+            'border-radius:4px;' +
+            'padding:1px 5px;' +
+            'letter-spacing:0.5px;' +
+            'vertical-align:super;' +
+            'line-height:1;' +
+            'text-transform:uppercase;' +
+        '">Alpha</sup>';
+    }
+
     navRight.innerHTML = '';
     var path = window.location.pathname;
 

@@ -22,7 +22,6 @@ function buildNavigation() {
     var navRight = document.querySelector('.nav-right');
     if (!navRight) return;
 
-    // ── Alpha badge ──────────────────────────────────────
     var logoSpan = document.querySelector('.navbar .logo span');
     if (logoSpan && !logoSpan.querySelector('.alpha-badge')) {
         var badge = document.createElement('span');
@@ -31,17 +30,18 @@ function buildNavigation() {
         badge.style.cssText = [
             'font-size:9px',
             'font-weight:700',
-            'color:#2266FF',
-            'background:rgba(34,102,255,0.15)',
+            'color:#ffffff',
+            'background:transparent',
             'border-radius:4px',
-            'padding:2px 6px',
-            'margin-left:6px',
-            'letter-spacing:0.5px',
+            'padding:0',
+            'margin-left:5px',
+            'letter-spacing:1px',
             'text-transform:uppercase',
-            'font-family:General Sans,sans-serif',
-            'vertical-align:middle',
+            'font-family:Sora,sans-serif',
+            'vertical-align:super',
             'line-height:1',
-            'display:inline-block'
+            'display:inline-block',
+            'opacity:0.45'
         ].join(';');
         logoSpan.appendChild(badge);
     }

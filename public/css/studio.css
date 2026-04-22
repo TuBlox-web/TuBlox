@@ -1,0 +1,283 @@
+@import url('https://api.fontshare.com/v2/css?f[]=general-sans@700,600,500,400&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700;800&display=swap');
+
+*, *::before, *::after {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+:root {
+    --s-bg:          #090f3b;
+    --s-bg-dark:     #060b2e;
+    --s-bg-card:     #0d1445;
+    --s-bg-elevated: #111a52;
+    --s-border:      #1a2460;
+    --s-border-light:#22308a;
+    --s-border-hover:#2d3fa0;
+    --s-white:       #ffffff;
+    --s-gray:        #8899cc;
+    --s-gray-light:  #aabbdd;
+    --s-radius:      8px;
+    --s-radius-lg:   12px;
+    --s-radius-xl:   16px;
+    --s-navbar-h:    60px;
+    --s-transition:  0.18s ease;
+    --s-shadow:      0 8px 40px rgba(0,0,0,0.5);
+    --s-shadow-lg:   0 24px 80px rgba(0,0,0,0.6);
+}
+
+html, body {
+    width: 100%;
+    min-height: 100vh;
+}
+
+body {
+    font-family: 'General Sans', -apple-system, sans-serif;
+    background: var(--s-bg-dark);
+    color: var(--s-white);
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
+}
+
+h1, h2, h3, h4, h5 {
+    font-family: 'Sora', sans-serif;
+    font-weight: 700;
+    line-height: 1.2;
+}
+
+a { color: inherit; text-decoration: none; }
+
+::selection {
+    background: var(--s-white);
+    color: var(--s-bg-dark);
+}
+
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--s-border-light); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--s-border-hover); }
+
+/* ============================================
+   NAVBAR
+   ============================================ */
+
+.studio-navbar {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    z-index: 200;
+    height: var(--s-navbar-h);
+    background: rgba(6, 11, 46, 0.92);
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    border-bottom: 1px solid var(--s-border);
+}
+
+.studio-navbar-inner {
+    max-width: 1280px;
+    height: 100%;
+    margin: 0 auto;
+    padding: 0 28px;
+    display: flex;
+    align-items: center;
+}
+
+/* ============================================
+   LOGO
+   ============================================ */
+
+.studio-logo {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    text-decoration: none;
+    user-select: none;
+}
+
+.studio-logo img {
+    width: 30px;
+    height: 30px;
+    filter: brightness(0) invert(1);
+    transition: transform var(--s-transition);
+    flex-shrink: 0;
+}
+
+.studio-logo:hover img {
+    transform: rotate(-6deg) scale(1.12);
+}
+
+.studio-logo span {
+    font-family: 'Sora', sans-serif;
+    font-size: 19px;
+    font-weight: 500;
+    color: var(--s-white);
+    letter-spacing: -0.3px;
+}
+
+.studio-logo span strong {
+    font-weight: 800;
+}
+
+/* ============================================
+   MAIN
+   ============================================ */
+
+.studio-main {
+    min-height: 100vh;
+    padding-top: var(--s-navbar-h);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background:
+        radial-gradient(ellipse 80% 60% at 50% 0%,
+            rgba(60, 90, 220, 0.18) 0%,
+            transparent 70%),
+        var(--s-bg-dark);
+    position: relative;
+    overflow: hidden;
+}
+
+/* subtle grid dots */
+.studio-main::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-image:
+        radial-gradient(circle, rgba(255,255,255,0.04) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+}
+
+/* ============================================
+   HERO
+   ============================================ */
+
+.studio-hero {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 20px;
+    text-align: center;
+    padding: 60px 24px;
+    max-width: 520px;
+    width: 100%;
+}
+
+/* icon ring */
+.studio-hero-icon {
+    width: 88px;
+    height: 88px;
+    border-radius: 24px;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid var(--s-border-light);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow:
+        0 0 0 8px rgba(255,255,255,0.02),
+        0 0 0 16px rgba(255,255,255,0.01);
+    margin-bottom: 8px;
+    transition: transform var(--s-transition), box-shadow var(--s-transition);
+}
+
+.studio-hero-icon:hover {
+    transform: translateY(-4px) scale(1.04);
+    box-shadow:
+        0 0 0 8px rgba(255,255,255,0.04),
+        0 0 0 16px rgba(255,255,255,0.02),
+        0 16px 40px rgba(0,0,0,0.4);
+}
+
+.studio-hero-icon img {
+    width: 48px;
+    height: 48px;
+    filter: brightness(0) invert(1);
+}
+
+/* title */
+.studio-hero-title {
+    font-family: 'Sora', sans-serif;
+    font-size: clamp(32px, 6vw, 52px);
+    font-weight: 800;
+    letter-spacing: -1.5px;
+    color: var(--s-white);
+    line-height: 1.05;
+}
+
+/* subtitle */
+.studio-hero-sub {
+    font-size: 15px;
+    color: var(--s-gray);
+    line-height: 1.6;
+    max-width: 340px;
+    margin-top: -6px;
+}
+
+/* ============================================
+   DOWNLOAD BUTTON
+   ============================================ */
+
+.studio-download-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    padding: 14px 36px;
+    font-family: 'General Sans', sans-serif;
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--s-bg-dark);
+    background: var(--s-white);
+    border: none;
+    border-radius: var(--s-radius-lg);
+    cursor: pointer;
+    text-decoration: none;
+    transition: all var(--s-transition);
+    margin-top: 8px;
+    user-select: none;
+    white-space: nowrap;
+}
+
+.studio-download-btn svg {
+    width: 18px;
+    height: 18px;
+    flex-shrink: 0;
+    transition: transform var(--s-transition);
+}
+
+.studio-download-btn:hover {
+    background: #e8eeff;
+    transform: translateY(-2px);
+    box-shadow: 0 8px 32px rgba(255,255,255,0.14);
+}
+
+.studio-download-btn:hover svg {
+    transform: translateY(2px);
+}
+
+.studio-download-btn:active {
+    transform: scale(0.97) translateY(0);
+}
+
+/* ============================================
+   RESPONSIVE
+   ============================================ */
+
+@media (max-width: 480px) {
+    .studio-navbar-inner { padding: 0 18px; }
+
+    .studio-logo span { font-size: 16px; }
+    .studio-logo img  { width: 26px; height: 26px; }
+
+    .studio-hero { padding: 40px 16px; gap: 16px; }
+
+    .studio-hero-icon { width: 72px; height: 72px; border-radius: 18px; }
+    .studio-hero-icon img { width: 38px; height: 38px; }
+
+    .studio-hero-title { font-size: 28px; letter-spacing: -1px; }
+    .studio-hero-sub   { font-size: 13px; }
+
+    .studio-download-btn { padding: 13px 28px; font-size: 14px; width: 100%; justify-content: center; }
+}

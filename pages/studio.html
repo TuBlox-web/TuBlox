@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TuBlox Studio</title>
+    <link rel="stylesheet" href="/css/studio.css">
+</head>
+<body>
+
+    <!-- NAVBAR -->
+    <nav class="studio-navbar">
+        <div class="studio-navbar-inner">
+            <a href="/studio" class="studio-logo">
+                <img src="/assets/Studio.svg" alt="Studio">
+                <span>TuBlox <strong>Studio</strong></span>
+            </a>
+        </div>
+    </nav>
+
+    <!-- MAIN -->
+    <main class="studio-main">
+        <div class="studio-hero">
+
+            <div class="studio-hero-icon">
+                <img src="/assets/Studio.svg" alt="TuBlox Studio">
+            </div>
+
+            <h1 class="studio-hero-title">TuBlox Studio</h1>
+
+            <a href="/download/TuStudioSetup.exe" class="studio-download-btn">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                    <polyline points="7 10 12 15 17 10"/>
+                    <line x1="12" y1="15" x2="12" y2="3"/>
+                </svg>
+                Download Setup
+            </a>
+
+        </div>
+    </main>
+
+    <script>
+        // favicon
+        (function() {
+            var l = document.createElement('link');
+            l.rel = 'icon'; l.type = 'image/svg+xml'; l.href = '/assets/Studio.svg';
+            document.head.appendChild(l);
+        })();
+    </script>
+</body>
+</html>

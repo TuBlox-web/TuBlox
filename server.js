@@ -397,6 +397,9 @@ app.get('/TuForums/:ownerId', (req, res) => res.sendFile(path.join(__dirname, 'p
 app.get('/TuForums/:ownerId/:postId', (req, res) => res.sendFile(path.join(__dirname, 'pages', 'forum-post.html')));
 app.get('/whitelist', (req, res) => res.sendFile(path.join(__dirname, 'pages', 'whitelist.html')));
 app.get('/settings', auth, (req, res) => res.sendFile(path.join(__dirname, 'pages', 'settings.html')));
+app.get('/studio', auth, (req, res) => 
+    res.sendFile(path.join(__dirname, 'pages', 'studio.html'))
+);
 
 // ═══════════════════════════════════════════════════════════════
 // API - HEALTH
@@ -1133,6 +1136,10 @@ app.get('/download/TuStudio.zip', (req, res) => {
     res.redirect(`${GAME_SERVER_URL}/download/TuStudio.zip`);
 });
 
+
+app.get('/download/TuStudioSetup.exe', (req, res) => {
+    res.redirect(`${GAME_SERVER_URL}/download/TuStudioSetup.exe`);
+});
 // ═══════════════════════════════════════════════════════════════
 // API - ADMIN (delete user by username + badges)
 // ═══════════════════════════════════════════════════════════════

@@ -83,6 +83,29 @@ a { color: inherit; text-decoration: none; }
     align-items: center;
 }
 
+
+.studio-nav-right {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+}
+
+.studio-nav-btn {
+    font-family: 'General Sans', sans-serif;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--s-gray);
+    padding: 8px 14px;
+    border-radius: var(--s-radius);
+    transition: all var(--s-transition);
+    text-decoration: none;
+    position: relative;
+}
+
+.studio-nav-btn:hover {
+    color: var(--s-white);
+    background: rgba(255,255,255,0.06);
+}
 /* ============================================
    LOGO
    ============================================ */

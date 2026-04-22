@@ -640,7 +640,7 @@ app.get('/api/user', authAPI, async (req, res) => {
 
 app.get('/api/users', async (req, res) => {
     try {
-        const users = await User.find().select('odilId username gameData createdAt lastSeen').sort({ createdAt: -1 }).limit(100);
+        const users = await User.find().select('odilId username gameData createdAt lastSeen').sort({ odilId: -1 }).limit(100);
         res.json({ success: true, users });
     } catch (err) {
         res.status(500).json({ success: false, message: 'Server error' });
